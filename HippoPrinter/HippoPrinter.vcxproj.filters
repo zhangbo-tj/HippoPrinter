@@ -304,6 +304,9 @@
     <ClCompile Include="src\libslic3r\libslic3r.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\libslic3r\SupportMaterial.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="HippoPrinter.h">

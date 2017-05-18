@@ -170,6 +170,7 @@
     <ClCompile Include="src\libslic3r\PrintObject.cpp" />
     <ClCompile Include="src\libslic3r\PrintRegion.cpp" />
     <ClCompile Include="src\libslic3r\SLAPrint.cpp" />
+    <ClCompile Include="src\libslic3r\SupportMaterial.cpp" />
     <ClCompile Include="src\libslic3r\Surface.cpp" />
     <ClCompile Include="src\libslic3r\SurfaceCollection.cpp" />
     <ClCompile Include="src\libslic3r\SVG.cpp" />

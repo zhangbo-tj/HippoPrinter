@@ -1053,3 +1053,39 @@ Print::output_filepath(const std::string &path)
 }
 
 }
+
+
+
+
+/*
+ *	以下为用户添加的代码，在原项目中是以perl代码形式存在的
+ */
+
+
+/*
+ *	对三维模型进行处理，包括slice, make perimeters, make skirt, 
+ *  generate support material, make brim等操作
+ */
+void Print::Process() {
+
+	//生成Perimeter
+	for (PrintObject* object : objects) {
+		object->MakePerimeters();
+	}
+
+	// 生成填充结构
+	for (PrintObject* object : objects) {
+		object->Infill();
+	}
+
+
+}
+
+
+void Print::MakeSkirt() {
+
+}
+
+void Print::MakeBrim() {
+
+}

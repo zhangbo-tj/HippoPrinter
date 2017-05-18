@@ -243,3 +243,4 @@ ModelManifest.xml
 
 # FAKE - F# Make
 .fake/
+/HippoPrinter/src/libslic3r/SupportMaterial.cpp

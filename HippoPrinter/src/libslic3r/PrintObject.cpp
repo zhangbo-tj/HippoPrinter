@@ -4,6 +4,7 @@
 #include "Geometry.hpp"
 #include <algorithm>
 #include <vector>
+#include <map>
 
 namespace Slic3r {
 
@@ -967,14 +968,19 @@ PrintObject::_infill()
 
 /*
  *	对三维模型进行切分
+ *  对于有切分缺陷的部分，使用其上方和下方的切分区域对其进行替换
+ *  删除为空的层
  */
 void PrintObject::Slice() {
 	if (state.is_done(posSlice)) return;
 
 	state.set_started(posSlice);
 
+
+	//对打印对象进行切分
 	_slice();
 
+	//遍历所有切分后的层，如果某一层存在slicing error，则使用其上一层和下一层的切分区域进行替换
 	for (auto layer_id = 0; layer_id < layer_count(); layer_id++) {
 		Layer* layer = get_layer(layer_id);
 
@@ -1005,6 +1011,8 @@ void PrintObject::Slice() {
 						lower_slices.surfaces.begin(), lower_slices.surfaces.end(),
 						back_inserter(source_surfaces));
 
+			
+			//对所有的contour进行union,然后再对holes进行difference，即得到该层的slices
 			Polygons source_contours;
 			for (auto& surface : source_surfaces) {
 				source_contours.insert(source_contours.end(), surface.expolygon.contour);
@@ -1025,6 +1033,7 @@ void PrintObject::Slice() {
 	}
 
 
+	//如果某一层没有切分区域，则将其移除，并修改其他层的id
 	while (!layers.empty() && get_layer(0)->slices.expolygons.size() == 0) {
 		delete_layer(0);
 		for (auto i = 0; i < layer_count(); i++) {
@@ -1036,13 +1045,15 @@ void PrintObject::Slice() {
 		SimplySlices(_print->config.resolution / Slic3r::SCALING_FACTOR);
 	}
 
+	//当layer->region被分类为top/bottom/internal时，typed_slices为真
+	//因此下一次再调用make_perimters的话会在计算loops之前进行union操作
 	typed_slices = false;
 	state.set_done(posSlice);
 }
 
 
 /*
- *	生成Perimeters
+ *	为打印对象生成Perimeters结构
  */
 void PrintObject::MakePerimeters() {
 	if (state.is_done(posPerimeters)) return;
@@ -1055,9 +1066,26 @@ void PrintObject::MakePerimeters() {
 	_make_perimeters();
 }
 
+
+/*
+ *	将LayerRegion中的每一个Slice都分类为top/internal/bottom
+ *  同时还将LayRegion中的每一个填充区域从expolygon转换为top/internal/bottom类型的surfaces collection
+ */
+void PrintObject::DetectSurfaceType() {
+	Slice();
+
+	detect_surfaces_type();
+}
+
+
+/*
+ *	对打印对象进行填充，首先要进行填充前的准备工作
+ */
 void PrintObject::Infill() {
+	//预处理
 	PrepareInfill();
 
+	//进行填充
 	_infill();
 }
 
@@ -1068,40 +1096,529 @@ void PrintObject::Infill() {
 void PrintObject::PrepareInfill() {
 	if (state.is_done(posPrepareInfill)) { return; }
 
+	//设置打印状态
 	state.set_started(posPrepareInfill);
 	invalidate_step(posPerimeters);
 
-	detect_surfaces_type();
+	//将所有layer region上的surface分类为top/internal/bottom
+	//根据某一曾上方或下方是否存在别的层进行判断
+	DetectSurfaceType();
 
+	//根据配置判断是否需要：
+	//1. 将bottom/top转换为internal
+	//2. 将thin internal转换为internal solid
 	for (auto& layer : layers) {
 		for (auto& layer_region : layer->regions) {
 			layer_region->prepare_fill_surfaces();
 		}
 	}
 
+	//使用BridgeDetector检测Bridges结构以及unsupported bridge region
+	//而且重新定义top/internal/bottom区域，在最下面一层可能也会有top区域
 	process_external_surfaces();
 
+	//将top/bottom/bridge附近的Internal转换为Internal solid,保证了在solid层中，
+	//solid下方的internal转变为internal solid
 	DiscoverHorizontalShells();
 
+	//将solid区域（bottom/top/perimeters）下方的internal转换为internal solid
 	ClipFillSurfaces();
 
+	//检测该层为internal solid而其下方的层为internal类型的区域
+	//将其一部分由internal solid转换为internal bridge,确保internal solid不会塌陷
 	bridge_over_infill();
 
+	//将不同层的填充区域根据配置参数进行合并
 	CombineInfill();
 
 	state.set_done(posPrepareInfill);
 }
 
+/*
+ *	检测external layers附近的fill surfaces
+ *  将其由internal重新分类为internal 和 internal solid
+ */
 void PrintObject::DiscoverHorizontalShells() {
+	for (auto region_id = 0; region_id < _print->regions.size(); region_id++) {
+		for (auto layer_id = 0; layer_id < layer_count(); layer_id++) {
+			LayerRegion* layer_region = get_layer(layer_id)->get_region(region_id);
 
+			if (layer_region->region()->config.solid_infill_every_layers
+				&& layer_region->region()->config.fill_density > 0
+				&& (layer_id % layer_region->region()->config.bottom_solid_layers) == 0) {
+			
+				SurfaceType type = layer_region->region()->config.fill_density == 100 ?
+					stInternalSolid : stInternalBridge;
+				
+				SurfacesPtr internal_surfaces;
+				internal_surfaces = layer_region->fill_surfaces.filter_by_type(stInternal);
+			}
+
+
+			// 在current layer上查找特定类型的slices
+			// 不适用fill_slices而使用slices的原因是后者同时包含了perimeter area，而这部分也将被扩充到shell
+			for (SurfaceType type : {stTop, stBottom, stBottomBridge}) {
+				//当前layer的current solid 区域，同时包含slices内的solid区域和solid infill区域
+				Polygons solid_polygons;
+				SurfacesPtr solid_slices = layer_region->slices.filter_by_type(type);
+				for (Surface* surface : solid_slices) {
+					solid_polygons.push_back(surface->operator Slic3r::Polygons);
+				}
+
+				SurfacesPtr solid_fill_surfaces = layer_region->fill_surfaces.filter_by_type(type);
+				for (Surface* surface : solid_fill_surfaces) {
+					solid_polygons.push_back(surface->operator Slic3r::Polygons);
+				}
+				
+				//如果当前层没有solid区域的话，则跳到下一个类型
+				if (solid_polygons.empty()) { continue; }
+
+				//当前层所处的solid层数
+				int solid_count = (type == stTop) ?
+					layer_region->region()->config.top_solid_layers :
+					layer_region->region()->config.bottom_solid_layers;
+
+				//neighbor_id表示与当前layer处于同一个solid 的layer
+				for (auto neighbor_id = (type == stTop) ? layer_id - 1 : layer_id + 1;
+					std::abs(neighbor_id - layer_id) <= solid_count - 1, neighbor_id >= 0 && neighbor_id < layer_count();
+					(type == stTop) ? neighbor_id-- : neighbor_id++) {
+					
+					//neighbor layer上处于同一个layer region的部分
+					LayerRegion* neighbor_layer_region = get_layer(neighbor_id)->regions[region_id];
+					SurfaceCollection neighbor_fill_surfaces = neighbor_layer_region->fill_surfaces;
+
+					//neighbor层上的internal 和internal solid填充区域
+					Polygons neighbor_polygons;
+					for (Surface& surface : neighbor_fill_surfaces.surfaces) {
+						if (surface.surface_type == stInternal || surface.surface_type == stInternalSolid) {
+							neighbor_polygons.push_back(surface.operator Slic3r::Polygons);
+						}
+					}
+
+					// 计算current layer上的solid区域，与 neighbor layer上的internal & internal solid区域的Intersection
+					// 即为当前层上的new internal solid区域，同时这一部分也是neighbor layer上的new internal solid部分
+					Polygons new_internal_solid = intersection(solid_polygons, neighbor_polygons,1);
+
+					// 如果这一层上不需要internal solid的话，需要根据用户设置的参数判读是否需要继续在查找neighbor layer
+					if (new_internal_solid.empty()) {
+						// 如果用户希望object是中空的，则不再搜索neighbor layer，此时只生产external solid shell，
+						// 从而会导致打印出的物体中perimeter之间有hole，internal solid shells都是previous layer上
+						// shell的子集
+						if (layer_region->region()->config.fill_density == 0) {
+							break;
+						}
+						else {
+							//如果需要internal infill, 则可以自由得生成所需要的internal solid shell
+							continue;
+						}
+					}
+
+					// 如果打印的是一个中空物体的话，则需要丢弃任何比perimeter更thin的solid shell
+					if (layer_region->region()->config.fill_density == 0) {
+						
+						// solid shell的厚度临界值
+						double margin = neighbor_layer_region->flow(frExternalPerimeter).scaled_width();
+
+						Polygons offseted = offset2(new_internal_solid, -margin, +margin,CLIPPER_OFFSET_SCALE, jtMiter, 5);
+						
+						// 计算得到的厚度过小的区域
+						Polygons too_narrow = diff(new_internal_solid, offseted, 1);
+
+						// 如果存在厚度过小的情况的话，就需要从current layer的solid区域剔除这一部分
+						// 同时要更新当前layer上的internal solid区域
+						if (!too_narrow.empty()) {
+							new_internal_solid = diff(new_internal_solid, too_narrow);
+							solid_polygons = new_internal_solid;
+						}
+					}
+
+
+					// 由于internal solid区域可能会被collapsed，因此要确保current layer上的new internal solid区域足够宽
+					{
+						// new internal solid区域的宽度边界，用于计算too narrow的区域
+						double margin = 3 * layer_region->flow(frSolidInfill).scaled_width();
+
+						Polygons offseted = offset2(new_internal_solid, -margin, margin, CLIPPER_OFFSET_SCALE, jtMiter, 5);
+						Polygons too_narrow = diff(new_internal_solid, offseted, 1);
+
+						// grow collapsing部分，并在neighbor layer和original layer上添加一部分区域，
+						// 从而可以保证下一层的shell也能得到支撑
+						if (!too_narrow.empty()) {
+
+							// 将too_narrow区域(即collapsing区域)向外扩展，并与neighbor layer上的internal & bridge区域做intersection
+							// 从而得到需要进行grow的区域，并将其添加到new internal solid部分
+							Polygons internal_bridge_polygons;
+							for (Surface& surface : neighbor_fill_surfaces.surfaces) {
+								if (surface.is_internal() || surface.is_bridge()) {
+									internal_bridge_polygons.push_back(surface.operator Slic3r::Polygons);
+								}
+							}
+
+							Polygons offseted_margin = offset(too_narrow, +margin);
+							Polygons grown = intersection(offseted_margin, internal_bridge_polygons);
+
+							new_internal_solid.insert(new_internal_solid.end(), grown.begin(), grown.end());
+							solid_polygons = new_internal_solid;
+						}
+
+					}
+
+					// 将neighbor层上的internal solid区域合并到当前层上的new internal solid区域
+					// 作为neighbor 层上的internal solid区域
+					Polygons neighbor_internal_solid;
+					for (Surface& surface : neighbor_fill_surfaces.surfaces) {
+						if (surface.surface_type == stInternalSolid) {
+							neighbor_internal_solid.push_back(surface.operator Slic3r::Polygons);
+						}
+					}
+					neighbor_internal_solid.insert(neighbor_internal_solid.end(), new_internal_solid.begin(), new_internal_solid.end());
+					ExPolygons internal_solid = union_ex(neighbor_internal_solid);
+
+					// 此时neighbor layer上的internal区域即为原本的internal 区域减去internal solid区域
+					ExPolygons neighbor_internal;
+					for (Surface& surface : neighbor_fill_surfaces.surfaces) {
+						if (surface.surface_type == stInternal) {
+							neighbor_internal.push_back(surface.expolygon);
+						}
+					}
+					ExPolygons internal = diff_ex(neighbor_internal, internal_solid, 1);
+
+					//将neighbor fill surfaces清空，并将internal和internal solid区域添加进去
+					neighbor_fill_surfaces.clear();
+
+					neighbor_fill_surfaces.append(internal, stInternal);
+					neighbor_fill_surfaces.append(internal_solid, stInternalSolid);
+
+					// 将neighbor layer上的top surfaces和bottom surfaces都添加进去
+					Surfaces top_bottom_surfaces;
+					for (Surface& surface : neighbor_layer_region->fill_surfaces.surfaces) {
+						if (surface.surface_type == stTop || surface.is_bottom()) {
+							top_bottom_surfaces.push_back(surface);
+						}
+					}
+
+					// 先对所有的top/bottom surfaces进行分组，然后再分别将每一组合并之后，再减去internal & internal solid区域，
+					// 剩余的部分就是新的top/bottom surfaces
+					SurfaceCollection top_bottom_surface_collection(top_bottom_surfaces);
+					std::vector<SurfacesConstPtr> grouped_surfaces;
+					for (SurfacesConstPtr surfaces : grouped_surfaces) {
+						ExPolygons all_surface_expolygons;
+						for (auto surface : surfaces) {all_surface_expolygons.push_back(surface->expolygon);}
+
+						ExPolygons internal_intersolid_expolygons;
+						std::merge(internal.begin(), internal.end(),
+							internal_solid.begin(), internal_solid.end(),
+							back_inserter(internal_intersolid_expolygons));
+
+						ExPolygons result_solid_expolygons = diff_ex(all_surface_expolygons, internal_intersolid_expolygons, 1);
+						
+						neighbor_fill_surfaces.append(result_solid_expolygons, surfaces[0]->surface_type);
+					}
+
+					//用计算出的新的neighbor layer上的fill surfaces替换
+					neighbor_layer_region->fill_surfaces = neighbor_fill_surfaces;
+				}
+				
+			}
+		}
+	}
 }
 
+
+/*
+ *	将internal solid（包括perimeter）下一层的internal和internal void surfaces
+ *  转换为internal surfaces
+ */
 void PrintObject::ClipFillSurfaces() {
+	bool precodition = config.infill_only_where_needed;
+	if (!precodition) return;
+	for (PrintRegion* region : _print->regions) {
+		precodition = precodition || region->config.fill_density > 0;
+	}
+	if (!precodition) return;
 
+	//由上向下进行处理，忽视最底层
+	Polygons upper_internal;
+	for (int layer_id = layer_count() - 1; layer_id >= 1; layer_id--) {
+		Layer* cur_layer = get_layer(layer_id);
+		Layer* lower_layer = get_layer(layer_id - 1);
+
+		//检测overhang区域，即solid infill surfaces
+		Polygons overhangs;
+		for (LayerRegion* region : cur_layer->regions) {
+			for (Surface& surface : region->fill_surfaces.surfaces) {
+				if (surface.is_solid()) {
+					overhangs.push_back(surface.operator Slic3r::Polygons);
+				}
+			}
+		}
+
+		// 如果存在一个没有被支撑perimeter loop的话，同样需要对其进行支撑
+		{
+
+			// 当前层的perimeters为slices surfaces - fill surfaces
+			Polygons cur_slices;
+			cur_slices = cur_layer->slices.operator Slic3r::Polygons;
+			Polygons cur_fill;
+			for (LayerRegion* region : cur_layer->regions) {
+				cur_fill.push_back(region->fill_surfaces.operator Slic3r::Polygons);
+			}
+			Polygons cur_perimeter = diff(cur_slices, cur_fill);
+
+			// 再计算cur layer的perimeter与下一层的infill surface之间的diff
+			// 即在cur layer的perimeter中减去被下一层的perimeter支撑的部分
+			Polygons lower_infill;
+			for (LayerRegion* region : lower_layer->regions) {
+				lower_infill.push_back(region->fill_surfaces.operator Slic3r::Polygons);
+			}
+
+			cur_perimeter = intersection(cur_perimeter, lower_infill, 1);
+
+			// 只考虑那些宽度超过extrusion width的perimeter
+			double width_threshold = 0;
+			for (LayerRegion* region : cur_layer->regions) {
+				width_threshold = std::min(width_threshold, (double)region->flow(frPerimeter).scaled_width());
+			}
+			cur_perimeter = offset2(cur_perimeter, -width_threshold, +width_threshold);
+
+			// 将perimeters中没有被低层perimeter支撑的部分添加到overhang中
+			overhangs.insert(overhangs.end(), cur_perimeter.begin(), cur_perimeter.end());
+		}
+
+
+		// 计算lower layer的new internal区域
+		// 将cur layer的需要支撑的区域（包括overhang和其上方的internal区域）
+		// 与lower layer的internal和internal void区域做intersection
+		
+		// 将当前层的overhang与上一层的internal合并
+		Polygons cur_overhangs_upperinternal;
+		std::merge(overhangs.begin(), overhangs.end(),
+			upper_internal.begin(), upper_internal.end(),
+			back_inserter(cur_overhangs_upperinternal));
+		// 下一层的internal和internal void区域
+		Polygons lower_internal_internalvoid;
+		for (LayerRegion* region : lower_layer->regions) {
+			for (Surface& surface : region->fill_surfaces.surfaces) {
+				if (surface.surface_type == stInternal || surface.surface_type == stInternalVoid) {
+					lower_internal_internalvoid.push_back(surface.operator Slic3r::Polygons);
+				}
+			}
+		}
+
+		//二者之间的intersection即为新的internal区域
+		Polygons new_internal = intersection(cur_overhangs_upperinternal, lower_internal_internalvoid);
+		upper_internal = new_internal;		//更新upper internal
+
+
+		// 将lower layer的new internal区域应用到每一个lower layer的每一个layer region上
+		// 方法是将new internal与每一个layer region的internal & internal void区域做intersection作为新的internal
+		// 而new internal与每一个layer region的internal & internal void区域的difference作为新的internal void
+		for (LayerRegion* layer_region : lower_layer->regions) {
+			if (layer_region->region()->config.fill_density == 0) return;
+
+			// lower layer上的internal surfaces和其他的surfaces
+			Polygons lower_internal_polygons;
+			Surfaces lower_other_surfaces;
+
+			for (Surface surface : layer_region->fill_surfaces.surfaces) {
+				if (surface.surface_type == stInternal || surface.surface_type == stInternalVoid) {
+					lower_internal_polygons.push_back(surface.operator Slic3r::Polygons);
+				}
+				else {
+					lower_other_surfaces.push_back(surface);
+				}
+			}
+
+			// 将new internal与internal & internal void区域的intersection作为新的internal区域
+			Surfaces lower_internal_surfaces;
+			ExPolygons added_lower_internal_expolygons = intersection_ex(lower_internal_polygons, new_internal, 1);
+			for (ExPolygon& expolygon : added_lower_internal_expolygons) {
+				lower_internal_surfaces.push_back(Surface(stInternal,expolygon));
+			}
+
+			// 将new internal与internal & internal void区域的difference作为internal void区域
+			ExPolygons added_lower_other_expolygons = diff_ex(lower_internal_polygons, new_internal, 1);
+			for (ExPolygon& expolygon : added_lower_other_expolygons) {
+				lower_other_surfaces.push_back(Surface(stInternalVoid, expolygon));
+			}
+
+			//将重新计算得到的internal和other fill surfaces添加到lower layer的fill surfaces中
+			layer_region->fill_surfaces.clear();
+			layer_region->fill_surfaces.append(lower_internal_surfaces);
+			layer_region->fill_surfaces.append(lower_other_surfaces);
+		}
+
+
+
+	}
 }
 
+
+
+/*
+ *	根据用户设置参数合并不同layer之间的fill surfaces
+ */
 void PrintObject::CombineInfill() {
 
+
+	//对每一个Print Region分别进行操作，对应的是每一个Print Region
+	for (int region_id = 0; region_id < _print->regions.size(); region_id++) {
+		PrintRegion* print_region = _print->get_region(region_id);
+		int infills_every_count = print_region->config.infill_every_layers;
+		if (!(infills_every_count > 1 && print_region->config.fill_density > 0))
+			continue;
+
+
+		//限制合并后的Layer的最大高度为用户设置的nozzle所允许的最大高度
+		double nozzle_diameter = std::min(
+				_print->config.nozzle_diameter.get_at(print_region->config.infill_extruder - 1),
+				_print->config.nozzle_diameter.get_at(print_region->config.solid_infill_extruder - 1)
+			);
+		
+		// 根据合并后所允许的最大高度计算层之间的合并信息
+		// combine<int, int>为<layer_id，layer_id下方要合并的层数>
+		std::map<int, int> combine;
+		{
+			double current_height = 0;
+			int layers = 0;
+			
+			//从layer id = 1开始，因为layer id = 0时下方并没有layer，所以也就不用进行合并
+			for (int layer_id = 1; layer_id < layer_count(); layer_id++) {
+				Layer* layer = get_layer(layer_id);
+
+				double height = layer->height;
+				// 合并后的层高不会超过max_layer_height，而且合并的层数不会超过max combined layer count
+				if (current_height + height >= nozzle_diameter + EPSILON || layers >= infills_every_count) {
+					combine[layer_id - 1] = layers;
+					current_height = 0;
+					layers = 0;
+				}
+				current_height += height;
+				layers++;
+			}
+			//添加最上面一层的合并信息
+			combine[layer_count() - 1] = layers;
+		}
+
+
+		// 遍历所有要进行合并的Layer
+		for (auto layer_combine : combine) {
+			int layer_id = layer_combine.first;
+			if (layer_id <= 1)
+				return;
+			
+			//获取所有要进行combine的layer region，这些layer region来自所有要合并的layer
+			LayerRegionPtrs layer_regions;
+			for (int id = layer_id - combine[layer_id] + 1; id <= layer_id; id++) {
+				layer_regions.push_back(get_layer(id)->get_region(region_id));
+			}
+
+			//只合并internal infill部分
+			for (SurfaceType type : {stInternal}) {
+				
+				SurfacesPtr internal_fill_surfaces = layer_regions[0]->fill_surfaces.filter_by_type(type);
+				
+				//使用lowest layer来初始化intersection
+				ExPolygons intersection;
+				for (Surface* surface : internal_fill_surfaces) {
+					intersection.push_back(surface->expolygon);
+				}
+
+				//从第二层开始，将其fill surfaces与intersection进行intersection操作
+				for (int id = 1; id < layer_regions.size(); id++) {
+					SurfacesPtr temp_fill_surfaces = layer_regions[id]->fill_surfaces.filter_by_type(type);
+					ExPolygons temp_intersection;
+					for (Surface* surface : temp_fill_surfaces) {
+						temp_intersection.push_back(surface->expolygon);
+					}
+
+					intersection = intersection_ex(intersection, temp_intersection);
+				}
+
+				//在intersection中所有area小于临界值的部分都将被剔除
+				double area_threshold = layer_regions[0]->infill_area_threshold();
+				for (auto iterator = intersection.begin(); iterator != intersection.end();) {
+					if (iterator->area() < area_threshold) {
+						intersection.erase(iterator);
+					}
+					else {
+						++iterator;
+					}
+				}
+
+				// 如果intersection为空，则进行下一次循环，即没有合格的intersection
+				if (intersection.empty()) {
+					continue;
+				}
+
+				// intersection包含可能被所有的layers合并的region，所以需要从所有的layers中移除这一部分
+				// layer_regions[-1] ???
+				ExPolygons intersection_with_clearance = offset_ex(intersection,
+					layer_regions[0]->flow(frInfill).scaled_width() / 2 +
+					layer_regions[0]->flow(frPerimeter).scaled_width() / 2 +
+					((type == stInternalSolid) || (print_region->config.fill_pattern != (ipRectilinear || ipGrid || ipHoneycomb))) ?
+					layer_regions[0]->flow(frSolidInfill).scaled_width() : 0
+					// 由于在稍后的步骤中rectlinear和honeycomb的填充区域将会grow，并与perimeters进行overlap，所以需要抵消这一部分
+				);
+				
+
+				//当前合并区域的层高
+				double sum_height = 0;
+				for (LayerRegion* region : layer_regions) {
+					sum_height += region->layer()->height;
+				}
+
+				// 对所有的layer region进行操作
+				for (LayerRegion* layer_region : layer_regions) {
+					ExPolygons this_type_expolygons;
+					Surfaces other_type_surfaces;
+					for (Surface& surface : layer_region->fill_surfaces.surfaces) {
+						if (surface.surface_type != type) {
+							this_type_expolygons.push_back(surface.expolygon);
+						}
+						else {
+							other_type_surfaces.push_back(surface);
+						}
+					}
+
+					//将internal infill与intersection with clearance做difference，得到new this type expolygons
+					ExPolygons new_this_type_expolygons = diff_ex(this_type_expolygons, intersection_with_clearance);
+					
+					//将internal infill减去intersection with clearance后剩下的部分作为新的internal infill
+					Surfaces new_this_type_surfaces;
+					for (auto& expolygon : new_this_type_expolygons) {
+						new_this_type_surfaces.push_back(Surface(type, expolygon));
+					}
+
+				
+					// 将调整过高度之后的surfaces添加的最上层的layer
+					if (layer_region->layer()->id() == get_layer(layer_id)->id()) {
+						for (ExPolygon& expolygon : intersection) {
+							Surface new_surface(type, expolygon);
+							new_surface.thickness = sum_height;
+							new_surface.thickness_layers = layer_regions.size();
+							new_this_type_surfaces.push_back(new_surface);
+						}
+					}
+					else {		//对于其他层则为void层
+						// this type expolygons与intersection with clearance的intersection作为internal void区域
+						// 原因是该区域都被转换到顶层的高度上了
+						ExPolygons void_expolygons = intersection_ex(this_type_expolygons, intersection_with_clearance);
+						for (ExPolygon& expolygon : void_expolygons) {
+							new_this_type_surfaces.push_back(Surface(stInternalVoid, expolygon));
+						}
+					}
+
+					// 将计算后的fill surfaces添加到该layer region上
+					layer_region->fill_surfaces.clear();
+					layer_region->fill_surfaces.append(new_this_type_surfaces);
+					layer_region->fill_surfaces.append(other_type_surfaces);
+				}
+			}
+
+		}
+
+	}
 }
 
 
@@ -1115,5 +1632,27 @@ void PrintObject::SimplySlices(double distance) {
 			region->slices.simplify(distance);
 		}
 	}
+}
 
+
+/*
+ *	生成支撑结构Supppoer Material
+ */
+void PrintObject::GenerateSupportMaterial() {
+	//预处理
+	Slice();
+
+	if (state.is_done(posSupportMaterial))
+		return;
+
+	state.set_started(posSupportMaterial);
+
+	clear_support_layers();
+
+	if ((!config.support_material && config.raft_layers == 0) ||
+		(layer_count() < 2)) {
+	
+		state.set_done(posSupportMaterial);
+		return;
+	}
 }

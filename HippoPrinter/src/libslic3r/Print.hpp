@@ -173,6 +173,8 @@ class PrintObject
 	void ClipFillSurfaces();
 	void CombineInfill();
 	void SimplySlices(double distance);
+	void DetectSurfaceType();
+	void GenerateSupportMaterial();
 	
 };
 
@@ -247,6 +249,15 @@ class Print
     void clear_regions();
     void delete_region(size_t idx);
     PrintRegionConfig _region_config_from_model_volume(const ModelVolume &volume);
+
+
+	/*
+	 *	用户自己添加的代码，主要内容是将perl部分代码转换为C++
+	 */
+	void Process();
+	void MakeSkirt();
+	void MakeBrim();
+
 };
 
 #define FOREACH_BASE(type, container, iterator) for (type::const_iterator iterator = (container).begin(); iterator != (container).end(); ++iterator)
