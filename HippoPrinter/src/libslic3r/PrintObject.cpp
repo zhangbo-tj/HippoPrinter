@@ -1,4 +1,4 @@
-#include "Print.hpp"
+﻿#include "Print.hpp"
 #include "BoundingBox.hpp"
 #include "ClipperUtils.hpp"
 #include "Geometry.hpp"
@@ -1006,10 +1006,11 @@ void PrintObject::Slice() {
 				}
 			}
 
-			Surfaces source_surfaces;
-			std::merge(upper_slices.surfaces.begin(), upper_slices.surfaces.end(),
-						lower_slices.surfaces.begin(), lower_slices.surfaces.end(),
-						back_inserter(source_surfaces));
+			Surfaces source_surfaces(upper_slices.surfaces.begin(), upper_slices.surfaces.end());
+			source_surfaces.insert(source_surfaces.end(), lower_slices.surfaces.begin(), lower_slices.surfaces.end());
+			//std::merge(upper_slices.surfaces.begin(), upper_slices.surfaces.end(),
+// 						lower_slices.surfaces.begin(), lower_slices.surfaces.end(),
+// 						back_inserter(source_surfaces));
 
 			
 			//对所有的contour进行union,然后再对holes进行difference，即得到该层的slices
@@ -1037,7 +1038,9 @@ void PrintObject::Slice() {
 	while (!layers.empty() && get_layer(0)->slices.expolygons.size() == 0) {
 		delete_layer(0);
 		for (auto i = 0; i < layer_count(); i++) {
-			get_layer(i)->set_id(get_layer(i)->id - 1);
+			//get_layer(i)->set_id(get_layer(i)->id() - 1);
+			int temp_id = get_layer(i)->id();
+			get_layer(i)->set_id(temp_id);
 		}
 	}
 
@@ -1162,12 +1165,16 @@ void PrintObject::DiscoverHorizontalShells() {
 				Polygons solid_polygons;
 				SurfacesPtr solid_slices = layer_region->slices.filter_by_type(type);
 				for (Surface* surface : solid_slices) {
-					solid_polygons.push_back(surface->operator Slic3r::Polygons);
+					//solid_polygons.push_back(surface->operator Slic3r::Polygons);
+					solid_polygons.insert(solid_polygons.end(),
+						surface->operator Slic3r::Polygons().begin(), surface->operator Slic3r::Polygons().end());
 				}
 
 				SurfacesPtr solid_fill_surfaces = layer_region->fill_surfaces.filter_by_type(type);
 				for (Surface* surface : solid_fill_surfaces) {
-					solid_polygons.push_back(surface->operator Slic3r::Polygons);
+					//solid_polygons.push_back(surface->operator Slic3r::Polygons);
+					solid_polygons.insert(solid_polygons.end(), 
+						surface->operator Slic3r::Polygons().begin(), surface->operator Slic3r::Polygons().end());
 				}
 				
 				//如果当前层没有solid区域的话，则跳到下一个类型
@@ -1191,7 +1198,9 @@ void PrintObject::DiscoverHorizontalShells() {
 					Polygons neighbor_polygons;
 					for (Surface& surface : neighbor_fill_surfaces.surfaces) {
 						if (surface.surface_type == stInternal || surface.surface_type == stInternalSolid) {
-							neighbor_polygons.push_back(surface.operator Slic3r::Polygons);
+							//neighbor_polygons.push_back(surface.operator Slic3r::Polygons);
+							neighbor_polygons.insert(neighbor_polygons.end(),
+								surface.operator Slic3r::Polygons().begin(), surface.operator Slic3r::Polygons().end());
 						}
 					}
 
@@ -1250,7 +1259,9 @@ void PrintObject::DiscoverHorizontalShells() {
 							Polygons internal_bridge_polygons;
 							for (Surface& surface : neighbor_fill_surfaces.surfaces) {
 								if (surface.is_internal() || surface.is_bridge()) {
-									internal_bridge_polygons.push_back(surface.operator Slic3r::Polygons);
+									//internal_bridge_polygons.push_back(surface.operator Slic3r::Polygons);
+									internal_bridge_polygons.insert(internal_bridge_polygons.end(),
+										surface.operator Slic3r::Polygons().begin(), surface.operator Slic3r::Polygons().end());
 								}
 							}
 
@@ -1268,10 +1279,13 @@ void PrintObject::DiscoverHorizontalShells() {
 					Polygons neighbor_internal_solid;
 					for (Surface& surface : neighbor_fill_surfaces.surfaces) {
 						if (surface.surface_type == stInternalSolid) {
-							neighbor_internal_solid.push_back(surface.operator Slic3r::Polygons);
+							//neighbor_internal_solid.push_back(surface.operator Slic3r::Polygons);
+							neighbor_internal_solid.insert(neighbor_internal_solid.end(),
+								surface.operator Slic3r::Polygons().begin(), surface.operator Slic3r::Polygons().end());
 						}
 					}
-					neighbor_internal_solid.insert(neighbor_internal_solid.end(), new_internal_solid.begin(), new_internal_solid.end());
+					neighbor_internal_solid.insert(neighbor_internal_solid.end(), 
+						new_internal_solid.begin(), new_internal_solid.end());
 					ExPolygons internal_solid = union_ex(neighbor_internal_solid);
 
 					// 此时neighbor layer上的internal区域即为原本的internal 区域减去internal solid区域
@@ -1305,10 +1319,14 @@ void PrintObject::DiscoverHorizontalShells() {
 						ExPolygons all_surface_expolygons;
 						for (auto surface : surfaces) {all_surface_expolygons.push_back(surface->expolygon);}
 
-						ExPolygons internal_intersolid_expolygons;
-						std::merge(internal.begin(), internal.end(),
-							internal_solid.begin(), internal_solid.end(),
-							back_inserter(internal_intersolid_expolygons));
+// 						ExPolygons internal_intersolid_expolygons;
+// 						std::merge(internal.begin(), internal.end(),
+// 							internal_solid.begin(), internal_solid.end(),
+// 							back_inserter(internal_intersolid_expolygons));
+
+						ExPolygons internal_intersolid_expolygons(internal.begin(), internal.end());
+						internal_intersolid_expolygons.insert(internal_intersolid_expolygons.end(), 
+							internal_solid.begin(), internal_solid.end());
 
 						ExPolygons result_solid_expolygons = diff_ex(all_surface_expolygons, internal_intersolid_expolygons, 1);
 						
@@ -1348,7 +1366,10 @@ void PrintObject::ClipFillSurfaces() {
 		for (LayerRegion* region : cur_layer->regions) {
 			for (Surface& surface : region->fill_surfaces.surfaces) {
 				if (surface.is_solid()) {
-					overhangs.push_back(surface.operator Slic3r::Polygons);
+					//overhangs.push_back(surface.operator Slic3r::Polygons);
+					overhangs.insert(overhangs.end(),
+						surface.operator Slic3r::Polygons().begin(),
+						surface.operator Slic3r::Polygons().end());
 				}
 			}
 		}
@@ -1358,10 +1379,13 @@ void PrintObject::ClipFillSurfaces() {
 
 			// 当前层的perimeters为slices surfaces - fill surfaces
 			Polygons cur_slices;
-			cur_slices = cur_layer->slices.operator Slic3r::Polygons;
+			cur_slices = cur_layer->slices.operator Slic3r::Polygons();
 			Polygons cur_fill;
 			for (LayerRegion* region : cur_layer->regions) {
-				cur_fill.push_back(region->fill_surfaces.operator Slic3r::Polygons);
+				//cur_fill.push_back(region->fill_surfaces.operator Slic3r::Polygons);
+				cur_fill.insert(cur_fill.end(),
+					region->fill_surfaces.operator Slic3r::Polygons().begin(), 
+					region->fill_surfaces.operator Slic3r::Polygons().end());
 			}
 			Polygons cur_perimeter = diff(cur_slices, cur_fill);
 
@@ -1369,7 +1393,10 @@ void PrintObject::ClipFillSurfaces() {
 			// 即在cur layer的perimeter中减去被下一层的perimeter支撑的部分
 			Polygons lower_infill;
 			for (LayerRegion* region : lower_layer->regions) {
-				lower_infill.push_back(region->fill_surfaces.operator Slic3r::Polygons);
+				//lower_infill.push_back(region->fill_surfaces.operator Slic3r::Polygons);
+				lower_infill.insert(lower_infill.end(),
+					region->fill_surfaces.operator Slic3r::Polygons().begin(),
+					region->fill_surfaces.operator Slic3r::Polygons().end());
 			}
 
 			cur_perimeter = intersection(cur_perimeter, lower_infill, 1);
@@ -1391,16 +1418,24 @@ void PrintObject::ClipFillSurfaces() {
 		// 与lower layer的internal和internal void区域做intersection
 		
 		// 将当前层的overhang与上一层的internal合并
-		Polygons cur_overhangs_upperinternal;
-		std::merge(overhangs.begin(), overhangs.end(),
-			upper_internal.begin(), upper_internal.end(),
-			back_inserter(cur_overhangs_upperinternal));
+// 		Polygons cur_overhangs_upperinternal;
+// 		std::merge(overhangs.begin(), overhangs.end(),
+// 			upper_internal.begin(), upper_internal.end(),
+// 			back_inserter(cur_overhangs_upperinternal));
+
+		Polygons cur_overhangs_upperinternal(overhangs.begin(), overhangs.end());
+		cur_overhangs_upperinternal.insert(cur_overhangs_upperinternal.end(),
+			upper_internal.begin(), upper_internal.end());
+
 		// 下一层的internal和internal void区域
 		Polygons lower_internal_internalvoid;
 		for (LayerRegion* region : lower_layer->regions) {
 			for (Surface& surface : region->fill_surfaces.surfaces) {
 				if (surface.surface_type == stInternal || surface.surface_type == stInternalVoid) {
-					lower_internal_internalvoid.push_back(surface.operator Slic3r::Polygons);
+					//lower_internal_internalvoid.push_back(surface.operator Slic3r::Polygons);
+					lower_internal_internalvoid.insert(lower_internal_internalvoid.end(), 
+						surface.operator Slic3r::Polygons().begin(),
+						surface.operator Slic3r::Polygons().end() );
 				}
 			}
 		}
@@ -1422,7 +1457,9 @@ void PrintObject::ClipFillSurfaces() {
 
 			for (Surface surface : layer_region->fill_surfaces.surfaces) {
 				if (surface.surface_type == stInternal || surface.surface_type == stInternalVoid) {
-					lower_internal_polygons.push_back(surface.operator Slic3r::Polygons);
+					//lower_internal_polygons.push_back(surface.operator Slic3r::Polygons);
+					lower_internal_polygons.insert(lower_internal_polygons.end(),
+						surface.operator Slic3r::Polygons().begin(), surface.operator Slic3r::Polygons().end() );
 				}
 				else {
 					lower_other_surfaces.push_back(surface);
@@ -1553,10 +1590,13 @@ void PrintObject::CombineInfill() {
 
 				// intersection包含可能被所有的layers合并的region，所以需要从所有的layers中移除这一部分
 				// layer_regions[-1] ???
+				std::vector<InfillPattern> patterns{ipRectilinear, ipGrid, ipHoneycomb};
 				ExPolygons intersection_with_clearance = offset_ex(intersection,
 					layer_regions[0]->flow(frInfill).scaled_width() / 2 +
 					layer_regions[0]->flow(frPerimeter).scaled_width() / 2 +
-					((type == stInternalSolid) || (print_region->config.fill_pattern != (ipRectilinear || ipGrid || ipHoneycomb))) ?
+					( (type == stInternalSolid) ||
+					  (std::find(patterns.begin(), patterns.end(), print_region->config.fill_pattern)!= patterns.end())
+					) ?
 					layer_regions[0]->flow(frSolidInfill).scaled_width() : 0
 					// 由于在稍后的步骤中rectlinear和honeycomb的填充区域将会grow，并与perimeters进行overlap，所以需要抵消这一部分
 				);
