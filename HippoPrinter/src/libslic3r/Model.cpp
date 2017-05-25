@@ -1086,4 +1086,17 @@ ModelInstance::transform_polygon(Polygon* polygon) const
     polygon->scale(this->scaling_factor);           // scale around polygon origin
 }
 
+void ModelInstance::SetRotation(double val) {
+	rotation = val;
+}
+
+void ModelInstance::SetScalingFactor(double val) {
+	scaling_factor = val;
+}
+
+void ModelInstance::SetOffset(const Pointf& off) {
+	offset = off;
+}
+
+
 }

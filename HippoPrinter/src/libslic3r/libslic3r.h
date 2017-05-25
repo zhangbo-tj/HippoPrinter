@@ -10,6 +10,8 @@
 #include <vector>
 #include <boost/thread.hpp>
 
+#include <QDebug>
+
 /* Implementation of CONFESS("foo"): */
 #ifdef _MSC_VER
 	#define CONFESS(...) confess_at(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
@@ -58,7 +60,6 @@ constexpr auto SCALED_EPSILON = scale_(EPSILON);
 constexpr auto RESOLUTION = 0.0125;
 constexpr auto SCALED_RESOLUTION = scale_(RESOLUTION);
 constexpr auto PI = 3.141592653589793238;
-constexpr auto M_PI = 3.141592653589793238;
 // When extruding a closed loop, the loop is interrupted and shortened a bit to reduce the seam.
 constexpr auto LOOP_CLIPPING_LENGTH_OVER_NOZZLE_DIAMETER = 0.15;
 // Maximum perimeter length for the loop to apply the small perimeter speed. 
@@ -72,46 +73,47 @@ enum Axis { X=0, Y, Z };
 template <class T>
 inline void append_to(std::vector<T> &dst, const std::vector<T> &src)
 {
-    dst.insert(dst.end(), src.begin(), src.end());
+	dst.insert(dst.end(), src.begin(), src.end());
 }
 
 template <class T> void
 _parallelize_do(std::queue<T>* queue, boost::mutex* queue_mutex, boost::function<void(T)> func)
 {
-    //std::cout << "THREAD STARTED: " << boost::this_thread::get_id() << std::endl;
-    while (true) {
-        T i;
-        {
-            boost::lock_guard<boost::mutex> l(*queue_mutex);
-            if (queue->empty()) return;
-            i = queue->front();
-            queue->pop();
-        }
-        //std::cout << "  Thread " << boost::this_thread::get_id() << " processing item " << i << std::endl;
-        func(i);
-        boost::this_thread::interruption_point();
-    }
+	//std::cout << "THREAD STARTED: " << boost::this_thread::get_id() << std::endl;
+	while (true) {
+		T i;
+		{
+			boost::lock_guard<boost::mutex> l(*queue_mutex);
+			if (queue->empty()) return;
+			i = queue->front();
+			queue->pop();
+		}
+		//std::cout << "  Thread " << boost::this_thread::get_id() << " processing item " << i << std::endl;
+		func(i);
+		boost::this_thread::interruption_point();
+	}
 }
 
 template <class T> void
 parallelize(std::queue<T> queue, boost::function<void(T)> func,
-    int threads_count = boost::thread::hardware_concurrency())
+	int threads_count = boost::thread::hardware_concurrency())
 {
-    if (threads_count == 0) threads_count = 2;
-    boost::mutex queue_mutex;
-    boost::thread_group workers;
-    for (int i = 0; i < std::min(threads_count, (int)queue.size()); i++)
-        workers.add_thread(new boost::thread(&_parallelize_do<T>, &queue, &queue_mutex, func));
-    workers.join_all();
+	qDebug() <<"The size of parallel queue is :"<< queue.size();
+	if (threads_count == 0) threads_count = 2;
+	boost::mutex queue_mutex;
+	boost::thread_group workers;
+	for (int i = 0; i < std::min(threads_count, (int)queue.size()); i++)
+		workers.add_thread(new boost::thread(&_parallelize_do<T>, &queue, &queue_mutex, func));
+	workers.join_all();
 }
 
 template <class T> void
 parallelize(T start, T end, boost::function<void(T)> func,
-    int threads_count = boost::thread::hardware_concurrency())
+	int threads_count = boost::thread::hardware_concurrency())
 {
-    std::queue<T> queue;
-    for (T i = start; i <= end; ++i) queue.push(i);
-    parallelize(queue, func, threads_count);
+	std::queue<T> queue;
+	for (T i = start; i <= end; ++i) queue.push(i);
+	parallelize(queue, func, threads_count);
 }
 
 } // namespace Slic3r

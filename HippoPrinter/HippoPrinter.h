@@ -14,6 +14,7 @@ class QLabel;
 class QWidget;
 class QVBoxLayout;
 class QHBoxLayout;
+class QToolBar;
 
 #include "ShowWidget.h"
 #include "FilamentConfigWidget.h"
@@ -33,6 +34,7 @@ public:
 private:
 	void InitActions();
 	void InitMenus();
+	void InitToolBars();
 	void InitWidgets();
 	void InitLayout();
 	void InitConnections();
@@ -57,6 +59,7 @@ private:
 	QMenu* file_menu_;	//文件菜单
 	QMenu* setting_menu_;	//设置菜单
 	QMenu* help_menu_;	//帮助菜单
+	QToolBar* action_toolbar_;
 
 private:
 	/*文件菜单下的操作*/
@@ -74,6 +77,9 @@ private:
 	QAction* about_hippo_action_;	//获取Hippo资料
 	QAction* about_manual_action_;	//获取软件使用手册
 	QAction* about_qt_action_;	//获取相关资料
+
+
+	QAction* gen_toolpath_action_;
 };
 
 

@@ -104,7 +104,7 @@ Fill::_infill_direction(const Surface &surface) const
         out_angle += this->_layer_angle(this->layer_id / surface.thickness_layers);
     }
 
-    out_angle += float(M_PI/2.);
+    out_angle += float(PI/2.);
     return direction_t(out_angle, out_shift);
 }
 

@@ -53,20 +53,20 @@ void SceneVolume::SetHover(bool flag) {
 }
 
 void SceneVolume::LoadMesh(const TriangleMesh& mesh) {
-	verts_.load_mesh(mesh);
+	tverts_.load_mesh(mesh);
 }
 
-const GLVertexArray& SceneVolume::Verts() const{
-	return verts_;
-}
-
-GLVertexArray& SceneVolume::Verts() {
-	return verts_;
-}
-
-void SceneVolume::SetVerts(const GLVertexArray& verts) {
-	verts_ = verts;
-}
+// const GLVertexArray& SceneVolume::Verts() const{
+// 	return verts_;
+// }
+// 
+// GLVertexArray& SceneVolume::Verts() {
+// 	return verts_;
+// }
+// 
+// void SceneVolume::SetVerts(const GLVertexArray& verts) {
+// 	verts_ = verts;
+// }
 
 
 

@@ -1,5 +1,5 @@
-#ifndef ShowWidget_H__
-#define ShowWidget_H__
+#ifndef SHOWWIDGET_H__
+#define SHOWWIDGET_H__
 
 #pragma once
 
@@ -21,23 +21,6 @@
 
 class QAction;
 class QMenu;
-class BedShape {
-public:
-	Pointf bed_minx_miny_;
-	Pointf bed_minx_maxy_;
-	Pointf bed_maxx_miny_;
-	Pointf bed_maxx_maxy_;
-	BoundingBoxf bbox_;
-public:
-	BedShape();
-	BedShape(const BedShape& bed);
-	BedShape(float minx, float maxx, float miny, float maxy);
-	BedShape& operator = (const BedShape& bed);
-	const BoundingBoxf& BBox()const;
-	BoundingBoxf& BBox();
-private:
-	void ReloadBBox();
-};
 
 class ShowWidget :
 	public QGLWidget
@@ -74,8 +57,9 @@ private:
 	void LoadVolumes();		//载入volumes
 	void ReloadMaxBBox();		//重新计算Bouding Box
 
-	void SetBedShape(const BedShape& bed);		//设置底板形状和大小
+	void SetBedShape(const BoundingBoxf& bed);		//设置底板形状和大小
 	void SetDefaultBedShape();		//设置默认底板形状和大小
+	Pointf GetBedCenter();
 
 	void InitActions();		//初始化鼠标右键Actions
 	void UnProject(int mouse_x, int mouse_y, Pointf3& world);		//将鼠标位置映射到三维点
@@ -98,6 +82,11 @@ private slots:
 	void ScaleVolumeY();		//在Y轴方向缩放
 	void ScaleVolumeZ();		//在Z轴方向缩放
 
+public slots:
+	void BackgroundProcess();
+
+	void ArrangeObjects();
+
 
 private:
 	vcg::Trackball trackball_;		//控制当前场景缩放和旋转操作的trackball
@@ -105,9 +94,9 @@ private:
 	TriangleMesh trimesh_;	
 
 	Model model_;
-	//Print print_;
+	Print print_;
 	std::vector<SceneVolume> volumes_;
-	BedShape bed_shape_;
+	BoundingBoxf bed_shape_;
 
 
 	Pointf3 origin_;
@@ -125,6 +114,8 @@ private:
 
 	bool left_pressed_;
 	bool right_pressed_;
+
+	bool need_arrange_;		//需要对当前的模型进行重新布局
 
 
 
@@ -150,5 +141,5 @@ private:
 	QAction* scale_volume_y_action_;
 	QAction* scale_volume_z_action_;
 };
-#endif // ShowWidget_H__
+#endif //SHOWWIDGET_H__ 
 

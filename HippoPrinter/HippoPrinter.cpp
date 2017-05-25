@@ -18,6 +18,7 @@
 #include <QStatusBar>
 #include <QFileDialog>
 #include <QIcon>
+#include <QToolBar>
 
 HippoPrinter::HippoPrinter(QWidget *parent)
 	: QMainWindow(parent)
@@ -30,6 +31,7 @@ HippoPrinter::HippoPrinter(QWidget *parent)
 	//初始化菜单和菜单项
 	InitActions();
 	InitMenus();
+	InitToolBars();
 	InitWidgets();
 	InitLayout();
 	InitConnections();
@@ -94,6 +96,16 @@ void HippoPrinter::InitActions() {
 	//获取Qt资料
 	about_qt_action_ = new QAction(QString::fromLocal8Bit("关于Qt"));
 	about_qt_action_->setStatusTip(QString::fromLocal8Bit("获取关于Qt的资料"));
+
+	//开始生成打印路径
+	gen_toolpath_action_ = new QAction(QString::fromLocal8Bit("生成路径"));
+	gen_toolpath_action_->setStatusTip(QString::fromLocal8Bit("生成打印路径"));
+}
+
+void HippoPrinter::InitToolBars() {
+	action_toolbar_ = addToolBar(QString::fromLocal8Bit("actions"));
+
+	action_toolbar_->addAction(gen_toolpath_action_);
 }
 
 void HippoPrinter::SetupWindowStyle() {
@@ -175,6 +187,7 @@ void HippoPrinter::InitLayout() {
 
 void HippoPrinter::InitConnections() {
 	connect(load_model_action_, SIGNAL(triggered()), this, SLOT(OpenFile()));
+	connect(gen_toolpath_action_, &QAction::triggered, show_widget_, &ShowWidget::BackgroundProcess);
 }
 
 

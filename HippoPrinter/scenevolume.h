@@ -1,5 +1,7 @@
 #pragma once
 
+#include <map>
+
 #include <src/slic3r/GUI/3DScene.hpp>
 class SceneVolume
 {
@@ -24,15 +26,20 @@ public:
 
 	void LoadMesh(const TriangleMesh& mesh);
 	
-	const GLVertexArray& Verts()const;
-	GLVertexArray& Verts();
-	void SetVerts(const GLVertexArray& verts);
+// 	const GLVertexArray& Verts()const;
+// 	GLVertexArray& Verts();
+// 	void SetVerts(const GLVertexArray& verts);
 
-private:
+public:
 	BoundingBoxf3 bbox_;
 	Pointf3 origin_;
 	bool selected_;
 	bool hover_;
-	GLVertexArray verts_;
+	float color[4];
+	GLVertexArray tverts_;
+	GLVertexArray qverts_;
+
+
+	coordf_t top_z;
 };
 

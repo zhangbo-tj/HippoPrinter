@@ -14,6 +14,7 @@
 #include <QMenu>
 #include <QInputDialog>
 
+
 const float DEFAULT_COLOR[4] = { 1,1,0,1};
 const float SELECTED_COLOR[4] = { 0, 1, 0, 1 };
 const float HOVER_COLOR[4] = { 0.4,0.9,0,1 };
@@ -26,7 +27,8 @@ ShowWidget::ShowWidget(QWidget * parent)
 	left_pressed_(false),
 	right_pressed_(true),
 	cur_mouse_x_(0), cur_mouse_y_(0),
-	pre_mouse_x_(0), pre_mouse_y_(0)
+	pre_mouse_x_(0), pre_mouse_y_(0),
+	need_arrange_(false)
 {
 	setMouseTracking(true);
 	InitModel();
@@ -38,11 +40,6 @@ ShowWidget::ShowWidget(QWidget * parent)
 }
 
 
-//************************************************************************
-// 日期：2016/12/20 
-// 返回: 
-// 功能: 析构函数
-//************************************************************************
 
 ShowWidget::~ShowWidget(){
 	
@@ -240,11 +237,24 @@ void ShowWidget::DrawVolumes(bool fakecolor)const {
 			glColor4fv(DEFAULT_COLOR);
 		}
 
-		size_t max_offset = volume.Verts().verts.size();
-		glCullFace(GL_BACK);
-		glVertexPointer(3, GL_FLOAT, 0, volume.Verts().verts.data());
-		glNormalPointer(GL_FLOAT, 0, volume.Verts().norms.data());
-		glDrawArrays(GL_TRIANGLES, 0, max_offset / 3);
+		
+		//绘制三维模型
+		if (!volume.qverts_.verts.empty()) {
+			int min_offset = 0;
+			int max_offset = volume.qverts_.verts.size();
+			glCullFace(GL_BACK);
+			glVertexPointer(3, GL_FLOAT, 0, volume.qverts_.verts.data());
+			glNormalPointer(GL_FLOAT, 0, volume.qverts_.norms.data());
+			glDrawArrays(GL_QUADS, 0, max_offset / 3);
+		}
+		if (!volume.tverts_.verts.empty()) {
+			int min_offset = 0;
+			int max_offset = volume.tverts_.verts.size();
+			glCullFace(GL_BACK);
+			glVertexPointer(3, GL_FLOAT, 0, volume.tverts_.verts.data());
+			glNormalPointer(GL_FLOAT, 0, volume.tverts_.norms.data());
+			glDrawArrays(GL_TRIANGLES, 0, max_offset / 3);
+		}
 		
 		glPopMatrix();
 	}
@@ -281,13 +291,14 @@ void ShowWidget::DrawBedShape()const {
 
 	glBegin(GL_TRIANGLES);
 
- 	glVertex3f(bed_shape_.bed_minx_miny_.x, bed_shape_.bed_minx_miny_.y, 0);
-	glVertex3f(bed_shape_.bed_maxx_maxy_.x, bed_shape_.bed_maxx_maxy_.y, 0);
-	glVertex3f(bed_shape_.bed_minx_maxy_.x, bed_shape_.bed_minx_maxy_.y, 0);
-	
-	glVertex3f(bed_shape_.bed_minx_miny_.x,bed_shape_.bed_minx_miny_.y,0);
-	glVertex3f(bed_shape_.bed_maxx_miny_.x, bed_shape_.bed_maxx_miny_.y, 0);
-	glVertex3f(bed_shape_.bed_maxx_maxy_.x, bed_shape_.bed_maxx_maxy_.y, 0);
+	glVertex3f(bed_shape_.min.x, bed_shape_.min.y, 0);
+	glVertex3f(bed_shape_.max.x, bed_shape_.max.y, 0);
+	glVertex3f(bed_shape_.min.x, bed_shape_.max.y, 0);
+
+	glVertex3f(bed_shape_.min.x, bed_shape_.min.y, 0);
+	glVertex3f(bed_shape_.max.x, bed_shape_.min.y, 0);
+	glVertex3f(bed_shape_.max.x, bed_shape_.max.y, 0);
+
 	glEnd();
 
 	glLineWidth(3);
@@ -436,20 +447,41 @@ void ShowWidget::contextMenuEvent(QContextMenuEvent *event) {
 
 
 void ShowWidget::LoadModel(char* file_name) {
-	TriangleMesh mesh;
-	mesh.ReadSTLFile(file_name);
-	//mesh.repair();
+	Pointf bed_size = bed_shape_.size();
+	Pointf bed_center = GetBedCenter();
+	Model temp_model = Model::read_from_file(file_name);
+	if (temp_model.objects.empty())
+		return;
+	for (ModelObject* object : temp_model.objects) {
+		ModelObject* added_object = model_.add_object(*object);
+		added_object->repair();
 
-	ModelObject* new_object = model_.add_object();
-	new_object->name = file_name;
-	new_object->input_file = file_name;
-	
+		if (object->instances.size() == 0) {
+			need_arrange_ = true;
+			added_object->center_around_origin();
+			added_object->add_instance();
+			//added_object->instances[0]->SetOffset(bed_center);
+		}
+		else {
+			added_object->align_to_ground();
+		}
 
-	ModelVolume *new_volume = new_object->add_volume(mesh);
-	AlignObjectToGround(new_object);
+// 		{
+// 			Pointf3 size = added_object->bounding_box().size();
+// 			double ratio = std::max(size.x, size.y) / unscale(std::max(bed_size.x, bed_size.y));
+// 
+// 			if (ratio > 5) {
+// 				for (ModelInstance* instance : added_object->instances) {
+// 					instance->SetScalingFactor(1 / ratio);
+// 				}
+// 			}
+// 		}
+		print_.auto_assign_extruders(added_object);
+		print_.add_model_object(added_object);
+	}
 	LoadVolumes();
-
-	//print_.add_model_object(new_object);
+	if (need_arrange_)
+		ArrangeObjects();
 }
 
 void ShowWidget::LoadVolumes() {
@@ -465,23 +497,37 @@ void ShowWidget::LoadVolumes() {
 }
 
 void ShowWidget::ReloadMaxBBox() {
-	BoundingBoxf& bed_bbox = bed_shape_.BBox();
-	max_bbox_.min = Pointf3(bed_bbox.min.x, bed_bbox.min.y, 0);
-	max_bbox_.max = Pointf3(bed_bbox.max.x, bed_bbox.max.y, 0);
+	max_bbox_.min = Pointf3(bed_shape_.min.x, bed_shape_.min.y, 0);
+	max_bbox_.max = Pointf3(bed_shape_.max.x, bed_shape_.max.y, 0);
 
 	for (SceneVolume volume : volumes_) {
 		max_bbox_.merge(volume.BBox());
 	}
 }
 
-void ShowWidget::SetBedShape(const BedShape& bed) {
+
+/*
+ *	设置热床（底板）形状
+ */
+void ShowWidget::SetBedShape(const BoundingBoxf& bed) {
 	bed_shape_ = bed;
 	ReloadMaxBBox();
 }
 
+
+/*
+ *	设置默认的热床（底板）形状
+ */
 void ShowWidget::SetDefaultBedShape() {
-	bed_shape_ = BedShape(0, 280, 0, 180);
+	bed_shape_ = BoundingBoxf(Pointf(0,0),Pointf(280,180));
 	ReloadMaxBBox();
+}
+
+/*
+ *	获取热床（底板）的中心
+ */
+Pointf ShowWidget::GetBedCenter() {
+	return bed_shape_.center();
 }
 
 void ShowWidget::InitActions() {
@@ -631,6 +677,9 @@ void ShowWidget::MirrorVolumeY() {
 
 void ShowWidget::MirrorVolumeZ() {
 	model_.objects[selected_volume_index_]->mirror(Axis::Z);
+	model_.objects[selected_volume_index_]->update_bounding_box();
+	//更新print内的model object
+	print_.add_model_object(model_.objects[selected_volume_index_], selected_volume_index_);
 	LoadVolumes();
 	update();
 }
@@ -729,46 +778,21 @@ void ShowWidget::AlignObjectToGround(ModelObject* new_object) {
 	new_object->origin_translation.translate(0, 0, -bb.min.z);
 }
 
-BedShape::BedShape() :
-	bed_minx_miny_(0, 0), bed_minx_maxy_(0, 0), bed_maxx_miny_(0, 0), bed_maxx_maxy_(0, 0) {
-	ReloadBBox();
+
+
+/*
+	开始处理模型
+*/
+void ShowWidget::BackgroundProcess() {
+	print_.Process();
 }
 
-BedShape::BedShape(const BedShape& bed)
-	:bed_minx_miny_(bed.bed_minx_miny_),
-	bed_minx_maxy_(bed.bed_minx_maxy_),
-	bed_maxx_miny_(bed.bed_maxx_miny_),
-	bed_maxx_maxy_(bed.bed_maxx_maxy_){
-	ReloadBBox();
-}
 
-BedShape::BedShape(float minx, float maxx, float miny, float maxy) 
-	:bed_minx_miny_(minx,miny),
-	bed_minx_maxy_(minx,maxy),
-	bed_maxx_miny_(maxx,miny),
-	bed_maxx_maxy_(maxx,maxy){
-	ReloadBBox();
-}
 
-BedShape& BedShape::operator =(const BedShape& bed) {
-	bed_minx_miny_ = bed.bed_minx_miny_;
-	bed_minx_maxy_ = bed.bed_minx_maxy_;
-	bed_maxx_miny_ = bed.bed_maxx_miny_;
-	bed_maxx_maxy_ = bed.bed_maxx_maxy_;
-	ReloadBBox();
-	return *this;
+/*
+ *	对打印对象进行重新布局
+ */
+void ShowWidget::ArrangeObjects() {
+	model_.arrange_objects(print_.config.min_object_distance(), &bed_shape_);
+	LoadVolumes();
 }
-
-const BoundingBoxf& BedShape::BBox()const {
-	return bbox_;
-}
-
-BoundingBoxf& BedShape::BBox() {
-	return bbox_;
-}
-
-void BedShape::ReloadBBox() {
-	bbox_.min = bed_minx_miny_;
-	bbox_.max = bed_maxx_maxy_;
-}
-

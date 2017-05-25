@@ -112,7 +112,7 @@ protected:
     
     // Implementations can override the following virtual method:
     virtual float _layer_angle(size_t idx) const {
-        return (idx % 2) == 0 ? (M_PI/2.) : 0;
+        return (idx % 2) == 0 ? (PI/2.) : 0;
     };
 
     direction_t _infill_direction(const Surface &surface) const;

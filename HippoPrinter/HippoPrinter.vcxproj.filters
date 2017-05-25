@@ -307,6 +307,15 @@
     <ClCompile Include="src\libslic3r\SupportMaterial.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="PreviewWidget.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="GeneratedFiles\Debug\moc_PreviewWidget.cpp">
+      <Filter>Generated Files\Debug</Filter>
+    </ClCompile>
+    <ClCompile Include="GeneratedFiles\Release\moc_PreviewWidget.cpp">
+      <Filter>Generated Files\Release</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="HippoPrinter.h">
@@ -328,6 +337,9 @@
       <Filter>Header Files</Filter>
     </CustomBuild>
     <CustomBuild Include="ShowWidget.h">
+      <Filter>Header Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="PreviewWidget.h">
       <Filter>Header Files</Filter>
     </CustomBuild>
   </ItemGroup>

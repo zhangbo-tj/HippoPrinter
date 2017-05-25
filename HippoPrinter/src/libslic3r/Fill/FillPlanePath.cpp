@@ -91,7 +91,7 @@ Pointfs FillArchimedeanChords::_generate(coord_t min_x, coord_t min_y, coord_t m
     const coordf_t rmax = std::sqrt(coordf_t(max_x)*coordf_t(max_x)+coordf_t(max_y)*coordf_t(max_y)) * std::sqrt(2.) + 1.5;
     // Now unwind the spiral.
     const coordf_t a = 1.;
-    const coordf_t b = 1./(2.*M_PI);
+    const coordf_t b = 1./(2.*PI);
     coordf_t theta = 0.;
     coordf_t r = 1;
     Pointfs out;

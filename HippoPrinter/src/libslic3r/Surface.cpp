@@ -54,4 +54,5 @@ Surface::is_bridge() const
         || this->surface_type == stInternalBridge;
 }
 
+
 }
