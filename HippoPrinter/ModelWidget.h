@@ -1,5 +1,5 @@
-#ifndef SHOWWIDGET_H__
-#define SHOWWIDGET_H__
+#ifndef MODELWIDGET_H__
+#define MODELWIDGET_H__
 
 #pragma once
 
@@ -22,15 +22,15 @@
 class QAction;
 class QMenu;
 
-class ShowWidget :
+class ModelWidget :
 	public QGLWidget
 {
 	Q_OBJECT
 
 
 public:
-	ShowWidget(QWidget* parent = 0);
-	~ShowWidget();
+	ModelWidget(Print* print,QWidget* parent = 0);
+	~ModelWidget();
 	
 	void initializeGL();	//
 	void paintGL();
@@ -44,6 +44,7 @@ public:
 	void mouseReleaseEvent(QMouseEvent *event);		//鼠标按键释放事件
 	void keyReleaseEvent(QKeyEvent *event);		//键盘按键释放事件
 	void contextMenuEvent(QContextMenuEvent *event);		//鼠标右键事件
+	vcg::Trackball::Button QT2VCG(Qt::MouseButton qtbt, Qt::KeyboardModifiers modifiers);
 
 public:
 	void LoadModel(char* file_name);		//导入模型
@@ -94,7 +95,7 @@ private:
 	TriangleMesh trimesh_;	
 
 	Model model_;
-	Print print_;
+	Print* print_;
 	std::vector<SceneVolume> volumes_;
 	BoundingBoxf bed_shape_;
 
@@ -141,5 +142,5 @@ private:
 	QAction* scale_volume_y_action_;
 	QAction* scale_volume_z_action_;
 };
-#endif //SHOWWIDGET_H__ 
+#endif //MODELWIDGET_H__ 
 

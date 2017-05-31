@@ -19,10 +19,12 @@
 #include <QFileDialog>
 #include <QIcon>
 #include <QToolBar>
+#include <QSlider>
 
 HippoPrinter::HippoPrinter(QWidget *parent)
 	: QMainWindow(parent)
 {
+	print_ = new Print();
 	//ui.setupUi(this);
 	setWindowTitle(QString::fromLocal8Bit("Hippo"));
 	setWindowIcon(QIcon("./Resources/hippo.svg"));
@@ -157,21 +159,39 @@ void HippoPrinter::InitMenus() {
 // 功能:
 //************************************
 void HippoPrinter::InitWidgets() {
-	print_config_widget_ = new PrintConfigWidget();
-	fila_config_layout_ = new FilamentConfigWidget();
-	printer_config_layout_ = new PrinterConfigWidget();
+// 	print_config_widget_ = new PrintConfigWidget();
+// 	fila_config_layout_ = new FilamentConfigWidget();
+// 	printer_config_layout_ = new PrinterConfigWidget();
+// 
+// 	left_tabWidget_ = new QTabWidget();
+// 	left_tabWidget_->addTab(print_config_widget_, QString::fromLocal8Bit("打印设置"));
+// 	left_tabWidget_->addTab(fila_config_layout_, QString::fromLocal8Bit("耗材设置"));
+// 	left_tabWidget_->addTab(printer_config_layout_, QString::fromLocal8Bit("打印机设置"));
+// 
+// 	show_widget_ = new ShowWidget();
+// 	central_widget_ = new QWidget();
+// 	central_widget_layout_ = new QHBoxLayout();
+// 	central_widget_layout_->addWidget(left_tabWidget_, 1);
+// 	central_widget_layout_->addWidget(show_widget_, 6);
+	central_tabwidget_ = new QTabWidget();
+	model_widget_ = new ModelWidget(print_);
+	
+	toolpath_3d_widget_ = new QWidget();
+	toolpath_preview_widget_ = new ToolpathPreviewWidget(print_);
+	toolpath_slider_ = new QSlider(Qt::Vertical);
+	toolpath_slider_->setRange(0, 1);
+	toolpath_slider_->setSingleStep(1);
+		
 
-	left_tabWidget_ = new QTabWidget();
-	left_tabWidget_->addTab(print_config_widget_, QString::fromLocal8Bit("打印设置"));
-	left_tabWidget_->addTab(fila_config_layout_, QString::fromLocal8Bit("耗材设置"));
-	left_tabWidget_->addTab(printer_config_layout_, QString::fromLocal8Bit("打印机设置"));
+	toolpath_layout_ = new QHBoxLayout(toolpath_3d_widget_);
+	toolpath_layout_->addWidget(toolpath_preview_widget_);
+	toolpath_layout_->addWidget(toolpath_slider_);
 
-	show_widget_ = new ShowWidget();
-	central_widget_ = new QWidget();
-	central_widget_layout_ = new QHBoxLayout();
-	central_widget_layout_->addWidget(left_tabWidget_, 1);
-	central_widget_layout_->addWidget(show_widget_, 6);
 
+	central_tabwidget_->addTab(model_widget_, QString::fromLocal8Bit("3D Model"));
+	central_tabwidget_->addTab(toolpath_3d_widget_, QString::fromLocal8Bit("3D Toolpath Preview"));
+
+	central_tabwidget_->setTabPosition(QTabWidget::West);
 }
 
 //************************************************************************
@@ -181,17 +201,36 @@ void HippoPrinter::InitWidgets() {
 //************************************************************************
 
 void HippoPrinter::InitLayout() {
-	central_widget_->setLayout(central_widget_layout_);
-	setCentralWidget(central_widget_);
+	//central_widget_->setLayout(central_widget_layout_);
+	setCentralWidget(central_tabwidget_);
 }
 
 void HippoPrinter::InitConnections() {
 	connect(load_model_action_, SIGNAL(triggered()), this, SLOT(OpenFile()));
-	connect(gen_toolpath_action_, &QAction::triggered, show_widget_, &ShowWidget::BackgroundProcess);
+	connect(gen_toolpath_action_, &QAction::triggered, model_widget_, &ModelWidget::BackgroundProcess);
+	connect(central_tabwidget_, &QTabWidget::currentChanged, this, &HippoPrinter::ChangeTab);
+
+	connect(toolpath_slider_, &QSlider::valueChanged, toolpath_preview_widget_, &ToolpathPreviewWidget::SetLayerZ);
 }
 
 
 void HippoPrinter::OpenFile() {
 	QString file = QFileDialog::getOpenFileName(this, QString::fromLocal8Bit("打开文件"), "", "*.stl");
-	show_widget_->LoadModel(file.toLatin1().data());
+	model_widget_->LoadModel(file.toLatin1().data());
 }
+
+void HippoPrinter::ChangeTab() {
+	
+	qDebug() << "cur tab: " << central_tabwidget_->currentIndex();
+
+	int current_tab_index = central_tabwidget_->currentIndex();
+
+	if (current_tab_index == 1) {
+		model_widget_->BackgroundProcess();
+		toolpath_preview_widget_->ReloadPrint();
+		toolpath_slider_->setMaximum(toolpath_preview_widget_->layer_values_.size());
+		toolpath_slider_->setValue(toolpath_slider_->maximum());
+	}
+}
+
+

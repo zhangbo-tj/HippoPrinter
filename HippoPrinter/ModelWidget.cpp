@@ -1,4 +1,4 @@
-#include "ShowWidget.h"
+#include "ModelWidget.h"
 
 #include <algorithm>
 
@@ -19,7 +19,7 @@ const float DEFAULT_COLOR[4] = { 1,1,0,1};
 const float SELECTED_COLOR[4] = { 0, 1, 0, 1 };
 const float HOVER_COLOR[4] = { 0.4,0.9,0,1 };
 
-ShowWidget::ShowWidget(QWidget * parent)
+ModelWidget::ModelWidget(Print* print,QWidget * parent)
 	:QGLWidget(parent),
 	enable_picking_(true),
 	hovered_volume_index_(-1),
@@ -30,6 +30,8 @@ ShowWidget::ShowWidget(QWidget * parent)
 	pre_mouse_x_(0), pre_mouse_y_(0),
 	need_arrange_(false)
 {
+	print_ = print;
+
 	setMouseTracking(true);
 	InitModel();
 
@@ -41,11 +43,11 @@ ShowWidget::ShowWidget(QWidget * parent)
 
 
 
-ShowWidget::~ShowWidget(){
+ModelWidget::~ModelWidget(){
 	
 }
 
-void ShowWidget::initializeGL() {
+void ModelWidget::initializeGL() {
 	glClearColor(1, 1, 1, 1);
 	glColor3f(1, 0, 0);
 	glEnable(GL_DEPTH_TEST);
@@ -88,7 +90,7 @@ void ShowWidget::initializeGL() {
 }
 
 
-void ShowWidget::paintGL() {
+void ModelWidget::paintGL() {
 	glClearColor(1, 1, 1, 1);
 	glClearDepth(1);
 	glDepthFunc(GL_LESS);
@@ -145,7 +147,7 @@ void ShowWidget::paintGL() {
 }
 
 
-void ShowWidget::resizeGL(int width, int height) {
+void ModelWidget::resizeGL(int width, int height) {
 	if (height == 0) {
 		height = 1;
 	}
@@ -171,13 +173,13 @@ void ShowWidget::resizeGL(int width, int height) {
 }
 
 
-void ShowWidget::InitModel() {
+void ModelWidget::InitModel() {
 	char* model_name = "3Dowllovely_face.stl";
 	LoadModel(model_name);
 }
 
 
-void ShowWidget::DrawXYZ()
+void ModelWidget::DrawXYZ()
 {
 	glDisable(GL_DEPTH_TEST);
 
@@ -209,7 +211,7 @@ void ShowWidget::DrawXYZ()
 
 
 
-void ShowWidget::DrawVolumes(bool fakecolor)const {
+void ModelWidget::DrawVolumes(bool fakecolor)const {
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_NORMAL_ARRAY);
@@ -263,7 +265,7 @@ void ShowWidget::DrawVolumes(bool fakecolor)const {
 	glDisableClientState(GL_NORMAL_ARRAY);
 }
 
-void ShowWidget::DrawBedShape()const {
+void ModelWidget::DrawBedShape()const {
 	float fCursor[4];
 	glGetFloatv(GL_CURRENT_COLOR, fCursor);	//获取当前颜色
 	glPushMatrix();
@@ -323,7 +325,7 @@ void ShowWidget::DrawBedShape()const {
 
 
 ///将Qt鼠标键盘事件转换为VCG库内的鼠标键盘事件
-vcg::Trackball::Button QT2VCG(Qt::MouseButton qtbt, Qt::KeyboardModifiers modifiers)
+vcg::Trackball::Button ModelWidget::QT2VCG(Qt::MouseButton qtbt, Qt::KeyboardModifiers modifiers)
 {
 	int vcgbt = vcg::Trackball::BUTTON_NONE;
 	if (qtbt & Qt::LeftButton) vcgbt |= vcg::Trackball::BUTTON_LEFT;
@@ -335,7 +337,7 @@ vcg::Trackball::Button QT2VCG(Qt::MouseButton qtbt, Qt::KeyboardModifiers modifi
 	return vcg::Trackball::Button(vcgbt);
 }
 
-void ShowWidget::mouseMoveEvent(QMouseEvent *event) {
+void ModelWidget::mouseMoveEvent(QMouseEvent *event) {
 	pre_mouse_x_ = cur_mouse_x_;
 	pre_mouse_y_ = cur_mouse_y_;
 
@@ -363,7 +365,7 @@ void ShowWidget::mouseMoveEvent(QMouseEvent *event) {
 	update();
 }
 
-void ShowWidget::wheelEvent(QWheelEvent* event) {
+void ModelWidget::wheelEvent(QWheelEvent* event) {
 	if (event->delta() > 0) {
 		trackball_.MouseWheel(1);
 	}
@@ -373,7 +375,7 @@ void ShowWidget::wheelEvent(QWheelEvent* event) {
 	update();
 }
 
-void ShowWidget::mousePressEvent(QMouseEvent* event) {
+void ModelWidget::mousePressEvent(QMouseEvent* event) {
 	if (event->button() == Qt::LeftButton) {
 		left_pressed_ = true;
 	}
@@ -392,7 +394,7 @@ void ShowWidget::mousePressEvent(QMouseEvent* event) {
 	update();
 }
 
-void ShowWidget::mouseReleaseEvent(QMouseEvent *event) {
+void ModelWidget::mouseReleaseEvent(QMouseEvent *event) {
 	if (event->button() == Qt::LeftButton) {
 		left_pressed_ = false;
 	}
@@ -403,7 +405,7 @@ void ShowWidget::mouseReleaseEvent(QMouseEvent *event) {
 }
 
 
-void ShowWidget::keyReleaseEvent(QKeyEvent *event) {
+void ModelWidget::keyReleaseEvent(QKeyEvent *event) {
 	if (event->key() == Qt::Key_Control) {
 		trackball_.ButtonUp(QT2VCG(Qt::NoButton, Qt::ControlModifier));
 	}
@@ -415,7 +417,7 @@ void ShowWidget::keyReleaseEvent(QKeyEvent *event) {
 	}
 }
 
-void ShowWidget::contextMenuEvent(QContextMenuEvent *event) {
+void ModelWidget::contextMenuEvent(QContextMenuEvent *event) {
 	right_button_menu_->clear();
 	right_button_menu_->addAction(reset_trackball_action_);
 	right_button_menu_->addAction(reload_volumes_action_);
@@ -446,7 +448,7 @@ void ShowWidget::contextMenuEvent(QContextMenuEvent *event) {
 }
 
 
-void ShowWidget::LoadModel(char* file_name) {
+void ModelWidget::LoadModel(char* file_name) {
 	Pointf bed_size = bed_shape_.size();
 	Pointf bed_center = GetBedCenter();
 	Model temp_model = Model::read_from_file(file_name);
@@ -476,15 +478,15 @@ void ShowWidget::LoadModel(char* file_name) {
 // 				}
 // 			}
 // 		}
-		print_.auto_assign_extruders(added_object);
-		print_.add_model_object(added_object);
+		print_->auto_assign_extruders(added_object);
+		print_->add_model_object(added_object);
 	}
 	LoadVolumes();
 	if (need_arrange_)
 		ArrangeObjects();
 }
 
-void ShowWidget::LoadVolumes() {
+void ModelWidget::LoadVolumes() {
 	volumes_.clear();
 	for (ModelObject* object : model_.objects) {
 		for (ModelVolume* model_volume : object->volumes) {
@@ -496,7 +498,7 @@ void ShowWidget::LoadVolumes() {
 	}
 }
 
-void ShowWidget::ReloadMaxBBox() {
+void ModelWidget::ReloadMaxBBox() {
 	max_bbox_.min = Pointf3(bed_shape_.min.x, bed_shape_.min.y, 0);
 	max_bbox_.max = Pointf3(bed_shape_.max.x, bed_shape_.max.y, 0);
 
@@ -509,7 +511,7 @@ void ShowWidget::ReloadMaxBBox() {
 /*
  *	设置热床（底板）形状
  */
-void ShowWidget::SetBedShape(const BoundingBoxf& bed) {
+void ModelWidget::SetBedShape(const BoundingBoxf& bed) {
 	bed_shape_ = bed;
 	ReloadMaxBBox();
 }
@@ -518,7 +520,7 @@ void ShowWidget::SetBedShape(const BoundingBoxf& bed) {
 /*
  *	设置默认的热床（底板）形状
  */
-void ShowWidget::SetDefaultBedShape() {
+void ModelWidget::SetDefaultBedShape() {
 	bed_shape_ = BoundingBoxf(Pointf(0,0),Pointf(280,180));
 	ReloadMaxBBox();
 }
@@ -526,11 +528,11 @@ void ShowWidget::SetDefaultBedShape() {
 /*
  *	获取热床（底板）的中心
  */
-Pointf ShowWidget::GetBedCenter() {
+Pointf ModelWidget::GetBedCenter() {
 	return bed_shape_.center();
 }
 
-void ShowWidget::InitActions() {
+void ModelWidget::InitActions() {
 	right_button_menu_ = new QMenu();
 
 	reset_trackball_action_ = new QAction(QString::fromLocal8Bit("重置"), this);
@@ -550,30 +552,30 @@ void ShowWidget::InitActions() {
 	scale_volume_y_action_ = new QAction(QString::fromLocal8Bit("沿Y轴"), this);
 	scale_volume_z_action_ = new QAction(QString::fromLocal8Bit("沿Z轴"), this);
 
-	connect(reset_trackball_action_, &QAction::triggered, this, &ShowWidget::ResetTrackball);
-	connect(delete_volume_action_, &QAction::triggered, this, &ShowWidget::DeleteVolume);
-	connect(reload_volumes_action_ , &QAction::triggered, this, &ShowWidget::ReloadAllVolumes);
+	connect(reset_trackball_action_, &QAction::triggered, this, &ModelWidget::ResetTrackball);
+	connect(delete_volume_action_, &QAction::triggered, this, &ModelWidget::DeleteVolume);
+	connect(reload_volumes_action_ , &QAction::triggered, this, &ModelWidget::ReloadAllVolumes);
 
-	connect(rotate_volume_x_action_, &QAction::triggered, this, &ShowWidget::RotateVolumeX);
-	connect(rotate_volume_y_action_, &QAction::triggered, this, &ShowWidget::RotateVolumeY);
-	connect(rotate_volume_z_action_, &QAction::triggered, this, &ShowWidget::RotateVolumeZ);
+	connect(rotate_volume_x_action_, &QAction::triggered, this, &ModelWidget::RotateVolumeX);
+	connect(rotate_volume_y_action_, &QAction::triggered, this, &ModelWidget::RotateVolumeY);
+	connect(rotate_volume_z_action_, &QAction::triggered, this, &ModelWidget::RotateVolumeZ);
 
-	connect(mirror_volume_x_action_, &QAction::triggered, this, &ShowWidget::MirrorVolumeX);
-	connect(mirror_volume_y_action_, &QAction::triggered, this, &ShowWidget::MirrorVolumeY);
-	connect(mirror_volume_z_action_, &QAction::triggered, this, &ShowWidget::MirrorVolumeZ);
+	connect(mirror_volume_x_action_, &QAction::triggered, this, &ModelWidget::MirrorVolumeX);
+	connect(mirror_volume_y_action_, &QAction::triggered, this, &ModelWidget::MirrorVolumeY);
+	connect(mirror_volume_z_action_, &QAction::triggered, this, &ModelWidget::MirrorVolumeZ);
 
-	connect(scale_volume_u_action_, &QAction::triggered, this, &ShowWidget::ScaleVolumeUniformly);
-	connect(scale_volume_x_action_, &QAction::triggered, this, &ShowWidget::ScaleVolumeX);
-	connect(scale_volume_y_action_, &QAction::triggered, this, &ShowWidget::ScaleVolumeY);
-	connect(scale_volume_z_action_, &QAction::triggered, this, &ShowWidget::ScaleVolumeZ);
+	connect(scale_volume_u_action_, &QAction::triggered, this, &ModelWidget::ScaleVolumeUniformly);
+	connect(scale_volume_x_action_, &QAction::triggered, this, &ModelWidget::ScaleVolumeX);
+	connect(scale_volume_y_action_, &QAction::triggered, this, &ModelWidget::ScaleVolumeY);
+	connect(scale_volume_z_action_, &QAction::triggered, this, &ModelWidget::ScaleVolumeZ);
 }
 
-void ShowWidget::ResetTrackball() {
+void ModelWidget::ResetTrackball() {
 	trackball_.SetIdentity();
 	update();
 }
 
-void ShowWidget::UnProject(int mouse_x, int mouse_y, Pointf3& world) {
+void ModelWidget::UnProject(int mouse_x, int mouse_y, Pointf3& world) {
 	glPushMatrix();
 
 	GLdouble model_view[16];
@@ -593,7 +595,7 @@ void ShowWidget::UnProject(int mouse_x, int mouse_y, Pointf3& world) {
 	glPopMatrix();
 }
 
-void ShowWidget::DeleteVolume() {
+void ModelWidget::DeleteVolume() {
 	if (selected_volume_index_ == -1) {
 		return;
 	}
@@ -603,7 +605,7 @@ void ShowWidget::DeleteVolume() {
 	update();
 }
 
-void ShowWidget::RotateVolumeX() {
+void ModelWidget::RotateVolumeX() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
 		QString::fromLocal8Bit("绕X轴旋转"),
@@ -623,7 +625,7 @@ void ShowWidget::RotateVolumeX() {
 	return;
 }
 
-void ShowWidget::RotateVolumeY() {
+void ModelWidget::RotateVolumeY() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
 		QString::fromLocal8Bit("绕Y轴旋转"),
@@ -643,7 +645,7 @@ void ShowWidget::RotateVolumeY() {
 	return;
 }
 
-void ShowWidget::RotateVolumeZ() {
+void ModelWidget::RotateVolumeZ() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
 		QString::fromLocal8Bit("绕Z轴旋转"),
@@ -663,28 +665,28 @@ void ShowWidget::RotateVolumeZ() {
 	return;
 }
 
-void ShowWidget::MirrorVolumeX() {
+void ModelWidget::MirrorVolumeX() {
 	model_.objects[selected_volume_index_]->mirror(Axis::X);
 	LoadVolumes();
 	update();
 }
 
-void ShowWidget::MirrorVolumeY() {
+void ModelWidget::MirrorVolumeY() {
 	model_.objects[selected_volume_index_]->mirror(Axis::Y);
 	LoadVolumes();
 	update();
 }
 
-void ShowWidget::MirrorVolumeZ() {
+void ModelWidget::MirrorVolumeZ() {
 	model_.objects[selected_volume_index_]->mirror(Axis::Z);
 	model_.objects[selected_volume_index_]->update_bounding_box();
 	//更新print内的model object
-	print_.add_model_object(model_.objects[selected_volume_index_], selected_volume_index_);
+	print_->add_model_object(model_.objects[selected_volume_index_], selected_volume_index_);
 	LoadVolumes();
 	update();
 }
 
-void ShowWidget::ScaleVolumeUniformly() {
+void ModelWidget::ScaleVolumeUniformly() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
 		QString::fromLocal8Bit("等比缩放"),
@@ -704,7 +706,7 @@ void ShowWidget::ScaleVolumeUniformly() {
 	return;
 }
 
-void ShowWidget::ScaleVolumeX() {
+void ModelWidget::ScaleVolumeX() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
 		QString::fromLocal8Bit("X轴方向缩放"),
@@ -724,7 +726,7 @@ void ShowWidget::ScaleVolumeX() {
 	return;
 }
 
-void ShowWidget::ScaleVolumeY() {
+void ModelWidget::ScaleVolumeY() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
 		QString::fromLocal8Bit("Y轴方向缩放"),
@@ -744,7 +746,7 @@ void ShowWidget::ScaleVolumeY() {
 	return;
 }
 
-void ShowWidget::ScaleVolumeZ() {
+void ModelWidget::ScaleVolumeZ() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
 		QString::fromLocal8Bit("Z轴方向缩放"),
@@ -764,12 +766,12 @@ void ShowWidget::ScaleVolumeZ() {
 	return;
 }
 
-void ShowWidget::ReloadAllVolumes() {
+void ModelWidget::ReloadAllVolumes() {
 	LoadVolumes();
 	update();
 }
 
-void ShowWidget::AlignObjectToGround(ModelObject* new_object) {
+void ModelWidget::AlignObjectToGround(ModelObject* new_object) {
 	BoundingBoxf3 bb;
 	for (const ModelVolume* v : new_object->volumes) {
 		bb.merge(v->mesh.bounding_box());
@@ -783,8 +785,8 @@ void ShowWidget::AlignObjectToGround(ModelObject* new_object) {
 /*
 	开始处理模型
 */
-void ShowWidget::BackgroundProcess() {
-	print_.Process();
+void ModelWidget::BackgroundProcess() {
+	print_->Process();
 }
 
 
@@ -792,7 +794,7 @@ void ShowWidget::BackgroundProcess() {
 /*
  *	对打印对象进行重新布局
  */
-void ShowWidget::ArrangeObjects() {
-	model_.arrange_objects(print_.config.min_object_distance(), &bed_shape_);
+void ModelWidget::ArrangeObjects() {
+	model_.arrange_objects(print_->config.min_object_distance(), &bed_shape_);
 	LoadVolumes();
 }

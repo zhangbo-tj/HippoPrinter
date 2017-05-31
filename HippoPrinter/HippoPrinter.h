@@ -1,5 +1,5 @@
-#ifndef __MAINWINDOW_H
-#define __MAINWINDOW_H
+#ifndef HIPPOPRINTER_H__
+#define HIPPOPRINTER_H__
 
 
 #include <QtWidgets/QMainWindow>
@@ -12,14 +12,20 @@ class QAction;
 class QWidget;
 class QLabel;
 class QWidget;
-class QVBoxLayout;
+//class QVBoxLayout;
 class QHBoxLayout;
 class QToolBar;
+class QSlider;
 
-#include "ShowWidget.h"
-#include "FilamentConfigWidget.h"
-#include "PrintConfigWidget.h"
-#include "PrinterConfigWidget.h"
+#include <src/libslic3r/Print.hpp>
+
+#include "ModelWidget.h"
+// #include "FilamentConfigWidget.h"
+// #include "PrintConfigWidget.h"
+// #include "PrinterConfigWidget.h"
+
+#include "ToolpathPreviewWidget.h"
+
 
 class HippoPrinter : public QMainWindow
 {
@@ -40,19 +46,34 @@ private:
 	void InitConnections();
 	void SetupWindowStyle();
 
-private:
-	QWidget* central_widget_;
-	QHBoxLayout* central_widget_layout_;
-	QTabWidget* left_tabWidget_;
-
-	PrintConfigWidget* print_config_widget_;
-	FilamentConfigWidget* fila_config_layout_;
-	PrinterConfigWidget* printer_config_layout_;
-
-	ShowWidget* show_widget_;
-
-	private slots:
+private slots:
 	void OpenFile();
+	void ChangeTab();
+
+private:
+	Print* print_;
+
+private:
+// 	QWidget* central_widget_;
+// 	QHBoxLayout* central_widget_layout_;
+// 	QTabWidget* left_tabWidget_;
+// 
+// 	PrintConfigWidget* print_config_widget_;
+// 	FilamentConfigWidget* fila_config_layout_;
+// 	PrinterConfigWidget* printer_config_layout_;
+
+
+	QTabWidget* central_tabwidget_;
+
+	ModelWidget* model_widget_;
+
+
+	QWidget* toolpath_3d_widget_;
+	ToolpathPreviewWidget* toolpath_preview_widget_;
+	QSlider* toolpath_slider_;
+	QHBoxLayout* toolpath_layout_;
+
+
 
 private:
 	//²Ëµ¥Ïî
@@ -84,4 +105,4 @@ private:
 
 
 
-#endif	//!__MAINWINDOW_H
+#endif	//!HIPPOPRINTER_H__

@@ -40,6 +40,8 @@ public:
 	GLVertexArray qverts_;
 
 
-	coordf_t top_z;
+// 	std::map<double, int> qverts_offset;
+// 	std::map<double, int> tverts_offset;
+	std::map<double, std::pair<int, int> > offsets;
 };
 
