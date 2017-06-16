@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <vector>
+#include <unordered_map>
 
 #include <QGLWidget>
 
@@ -22,6 +23,10 @@
 class QAction;
 class QMenu;
 
+enum Color_By{color_by_volume,color_by_object};
+enum Select_By{select_by_object, select_by_volume, select_by_instance};
+enum Drag_By {drag_by_object, drag_by_instance};
+
 class ModelWidget :
 	public QGLWidget
 {
@@ -29,7 +34,7 @@ class ModelWidget :
 
 
 public:
-	ModelWidget(Print* print,QWidget* parent = 0);
+	ModelWidget(Print* print,Model* model, QWidget* parent = 0);
 	~ModelWidget();
 	
 	void initializeGL();	//
@@ -47,15 +52,15 @@ public:
 	vcg::Trackball::Button QT2VCG(Qt::MouseButton qtbt, Qt::KeyboardModifiers modifiers);
 
 public:
-	void LoadModel(char* file_name);		//导入模型
+	//void LoadModel(char* file_name);		//导入模型
 
 private:
-	void DrawXYZ();		//绘制坐标系
+	void DrawAxes();		//绘制坐标系
 	void DrawVolumes(bool fakecolor = false) const;		//绘制volumes
 	void DrawBedShape()const;			//绘制xoy平面
 
 	void AlignObjectToGround(ModelObject* new_object);
-	void LoadVolumes();		//载入volumes
+	//void LoadVolumes();		//载入volumes
 	void ReloadMaxBBox();		//重新计算Bouding Box
 
 	void SetBedShape(const BoundingBoxf& bed);		//设置底板形状和大小
@@ -83,25 +88,61 @@ private slots:
 	void ScaleVolumeY();		//在Y轴方向缩放
 	void ScaleVolumeZ();		//在Z轴方向缩放
 
-public slots:
-	void BackgroundProcess();
 
-	void ArrangeObjects();
+public:
+	void ReloadVolumes();
+	void ZoomToVolumes();
+
+private:
+	void ResetVolumes();
+
+	void LoadModelObject(int object_idx);
+
+	void LoadBedShape();
+
+	void ZoomToBBox(BoundingBoxf3& bbox);
+
+	void ZoomToBed();
+
+	void LoadMaxBBox();
+
+	void MirrorVolume(Axis axis);
 
 
 private:
 	vcg::Trackball trackball_;		//控制当前场景缩放和旋转操作的trackball
 
+	Model* model_;		//打印模型
+	Print* print_;		//打印对象
+	BoundingBoxf bed_shape_;		//底板形状
+	BoundingBoxf3 max_bbox_;
+	std::vector<SceneVolume> volumes_;	//渲染对象
+
+	Color_By color_by_;
+	Select_By select_by_;
+	Drag_By drag_by_;
+
+	//<volume_idx, {obj_idx, volume_idx, instance_idx}>
+	std::unordered_map<int, std::pair<std::pair<int, int>, int>> volume_to_object_;
+
+	// <obj_idx, {volume_idx1, volume_idx2, ....}>
+	std::unordered_map<int, std::vector<int>> object_to_volumes_;
+
+	bool enable_picking_;
+	int hovered_volume_index_;		//hovered volume index
+	int selected_volume_index_;		//selected volume index
+
+
+
 	TriangleMesh trimesh_;	
 
-	Model model_;
-	Print* print_;
-	std::vector<SceneVolume> volumes_;
-	BoundingBoxf bed_shape_;
+	
+	
+	
 
 
 	Pointf3 origin_;
-	BoundingBoxf3 max_bbox_;
+	double scale_;
 	
 
 	int cur_mouse_x_;
@@ -109,9 +150,7 @@ private:
 	int pre_mouse_x_;
 	int pre_mouse_y_;
 
-	bool enable_picking_;
-	int hovered_volume_index_;
-	int selected_volume_index_;
+	
 
 	bool left_pressed_;
 	bool right_pressed_;

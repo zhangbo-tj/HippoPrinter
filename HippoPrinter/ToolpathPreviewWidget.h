@@ -31,7 +31,7 @@ class ToolpathPreviewWidget:public QGLWidget
 {
 	Q_OBJECT
 public:
-	ToolpathPreviewWidget(Print* print,QWidget* parent = 0);
+	ToolpathPreviewWidget(Print* print,std::map<int,double>* layer_values, QWidget* parent = 0);
 	~ToolpathPreviewWidget();
 
 	void initializeGL();
@@ -65,13 +65,24 @@ public:
 	void LoadPrintObjectToolpaths(const PrintObject* object);
 	
 	//重新载入打印路径
-	void ReloadPrint();
+	void ReloadVolumes();
 
 	//载入打印路径
 	void LoadPrint();
 
 	//重置所有的显示对象
 	void ResetVolumes();
+
+	void LoadBedShape();
+
+	void ZoomToBed();
+
+	void ZoomToVolumes();
+
+	void ZoomToBBox(BoundingBoxf3& bbox);
+
+	void LoadMaxBBox();
+
 
 private:
 	//绘制打印对象，即打印对象的打印路径
@@ -86,24 +97,16 @@ private:
 	void SetDefaultBedshape();
 
 	//重新计算Bounding box
-	void ReloadBBox();
+	//void ReloadBBox();
 
 
 	//初始化Actions，并关联操作
 	void InitActions();
 
 
-
-// 	void ExtrusionentitiesToVerts(ExtrusionEntityCollection& entities,coordf_t top_z,
-// 			const Point& copy,SceneVolume& scenevolume);
-// 	//void ExtrusionPathToVerts(ExtrusionPath& entity, coordf_t top_z,
-// 	//	const Point& copy, SceneVolume& volume);
-// 	void ExtrusionLoopToVerts(ExtrusionLoop& entity, coordf_t top_z,
-// 		const Point& copy, SceneVolume& volume);
-
-	// 添加ExtrusionEntity为新的volume对象
-	void AddScenevolume(ExtrusionEntityCollection& entities,coordf_t top_z,
-		const Point& copy,int color_index,BoundingBoxf3& bbox);
+// 	// 添加ExtrusionEntity为新的volume对象
+	void AddScenevolume(ExtrusionEntityCollection& entities, coordf_t top_z,
+		const Point& copy, int color_index, BoundingBoxf3& bbox);
 
 	//将extrusion entiti 转换为verts
 	void ExtrusionEntityToVerts(ExtrusionEntity& entity, coordf_t top_z,
@@ -128,7 +131,7 @@ private:
 	Print* print_;
 	
 	//控件的Bounding Box
-	BoundingBoxf3 bbox_;
+	BoundingBoxf3 max_bbox_;
 
 	//底板形状
 	BoundingBoxf bed_shape_;
@@ -147,9 +150,11 @@ private:
 	double min_z_;
 	double max_z_;
 
+	double scale_;
+
 public:
 	//<layer_id, print_z> 获取每一层的print_z
-	std::map<int, double> layer_values_;
+	std::map<int, double>* layer_values_;
 };
 
 

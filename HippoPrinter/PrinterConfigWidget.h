@@ -30,7 +30,7 @@ public:
 
 
 private:
-	QVBoxLayout* printer_config_main_layout_;	//全局布局
+	QGridLayout* printer_config_main_layout_;	//全局布局
 	QGridLayout* bed_size_config_layout_;		//热床设置控件布局
 	QGridLayout* firmware_config_layout_;	//固件设置控件布局
 	

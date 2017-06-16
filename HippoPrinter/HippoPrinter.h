@@ -16,15 +16,19 @@ class QWidget;
 class QHBoxLayout;
 class QToolBar;
 class QSlider;
+class QListWidget;
+class QStackedWidget;
 
 #include <src/libslic3r/Print.hpp>
+#include <src/libslic3r/BoundingBox.hpp>
 
 #include "ModelWidget.h"
-// #include "FilamentConfigWidget.h"
-// #include "PrintConfigWidget.h"
-// #include "PrinterConfigWidget.h"
+#include "FilamentConfigWidget.h"
+#include "PrintConfigWidget.h"
+#include "PrinterConfigWidget.h"
 
 #include "ToolpathPreviewWidget.h"
+#include "ToolpathPlaneWidget.h"
 
 
 class HippoPrinter : public QMainWindow
@@ -48,32 +52,7 @@ private:
 
 private slots:
 	void OpenFile();
-	void ChangeTab();
-
-private:
-	Print* print_;
-
-private:
-// 	QWidget* central_widget_;
-// 	QHBoxLayout* central_widget_layout_;
-// 	QTabWidget* left_tabWidget_;
-// 
-// 	PrintConfigWidget* print_config_widget_;
-// 	FilamentConfigWidget* fila_config_layout_;
-// 	PrinterConfigWidget* printer_config_layout_;
-
-
-	QTabWidget* central_tabwidget_;
-
-	ModelWidget* model_widget_;
-
-
-	QWidget* toolpath_3d_widget_;
-	ToolpathPreviewWidget* toolpath_preview_widget_;
-	QSlider* toolpath_slider_;
-	QHBoxLayout* toolpath_layout_;
-
-
+	void SwitchTab();
 
 private:
 	//菜单项
@@ -101,6 +80,75 @@ private:
 
 
 	QAction* gen_toolpath_action_;
+
+
+private:
+
+	QTabWidget* central_tabwidget_;
+
+	//显示三维模型
+	ModelWidget* model_widget_;
+
+	//显示三维打印路径
+	QWidget* toolpath_3d_widget_;
+	ToolpathPreviewWidget* toolpath_preview_widget_;
+	QSlider* toolpath_3d_slider_;
+	QHBoxLayout* toolpath_3d_layout_;
+
+	//显示二维打印路径
+	QWidget* toolpath_2d_widget_;
+	ToolpathPlaneWidget* toolpath_plane_widget_;
+	QSlider* toolpath_2d_slider_;
+	QHBoxLayout* toolpath_2d_layout_;
+
+
+	//设置耗材参数、打印参数、打印机参数
+	QWidget* setting_main_widget_;
+	QHBoxLayout* setting_hlayout_;
+	QListWidget* setting_listwidget_;
+	QStackedWidget* setting_stackedwidget_;
+	FilamentConfigWidget* fila_config_widget_;
+	PrintConfigWidget* print_config_widget_;
+	PrinterConfigWidget* printer_config_widget_;
+
+
+private slots:
+	void StartProcess();
+
+private:
+	void LoadFile(char* file_name);
+	void LoadModelObjects();
+
+	void SetDefaultBedShape();
+	void LoadBedShape();
+
+	void ArrangeObjects();
+
+	//打印对象发生改变
+	void OnModelChanged();
+
+	//刷新控件内容
+	void RefreshWidgets();
+
+
+	//生成打印路径过程
+	void OnProcessCompleted();
+
+
+private:
+	Model* model_;		//Model对象
+	Print* print_;		//Print对象
+
+	BoundingBoxf bed_shape_;
+
+	bool need_arrange_;		//是否需要对打印对象重新布局，默认为false
+	bool force_autocenter_;		//将打印对象置于底板中心
+
+	bool processed_;		//是否已经生成打印路径
+
+	//<layer_id, print_z>每一层对应的print_z
+	std::map<int, double> layer_values_;		
+
 };
 
 

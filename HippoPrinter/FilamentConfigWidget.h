@@ -23,7 +23,7 @@ public:
 
 private:
 	
-	QVBoxLayout* filacofig_main_layout_;		//控件整体布局
+	QGridLayout* filacofig_main_layout_;		//控件整体布局
 	QGridLayout* fila_config_layout_;	//耗材参数设置布局
 	QGridLayout* temp_config_layout_;	//温度设置布局
 

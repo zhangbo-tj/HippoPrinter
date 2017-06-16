@@ -14,29 +14,34 @@
 #include <QMenu>
 #include <QInputDialog>
 
-
+const float COLORS[4][4] = { { 1,0.95,0.2,1 },{ 1,0.45,0.45,1 },{ 0.5,1,0.5,1 },{ 0.5,0.5,1,1} };
 const float DEFAULT_COLOR[4] = { 1,1,0,1};
 const float SELECTED_COLOR[4] = { 0, 1, 0, 1 };
 const float HOVER_COLOR[4] = { 0.4,0.9,0,1 };
 
-ModelWidget::ModelWidget(Print* print,QWidget * parent)
+ModelWidget::ModelWidget(Print* print,Model* model,QWidget * parent)
 	:QGLWidget(parent),
 	enable_picking_(true),
+	color_by_(color_by_volume),select_by_(select_by_object),drag_by_(drag_by_instance),
+
 	hovered_volume_index_(-1),
 	selected_volume_index_(-1),
 	left_pressed_(false),
 	right_pressed_(true),
 	cur_mouse_x_(0), cur_mouse_y_(0),
 	pre_mouse_x_(0), pre_mouse_y_(0),
-	need_arrange_(false)
+	need_arrange_(false),scale_(1)
 {
 	print_ = print;
+	model_ = model;
+	
+	LoadBedShape();
+
+	ResetVolumes();
 
 	setMouseTracking(true);
-	InitModel();
 
 	max_bbox_.defined = true;
-	SetDefaultBedShape();
 	
 	InitActions();
 }
@@ -82,11 +87,11 @@ void ModelWidget::initializeGL() {
 	glLightfv(GL_LIGHT1, GL_DIFFUSE, light0_diffuse1);
 	glLightfv(GL_LIGHT1, GL_SPECULAR, light_specular1);
 	
-	trackball_.center = vcg::Point3f(0, 0, 0);
-	trackball_.radius = 50;
 	
 	glLoadIdentity();
 	//gluLookAt(1, 1, 1, 0, 0, 0, 0, 0, 1);
+
+	ZoomToBed();
 }
 
 
@@ -97,15 +102,20 @@ void ModelWidget::paintGL() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
+	//glLoadIdentity();
 
 	glPushMatrix();
 
-	gluLookAt(0.06, 0, 0.1, 0, 1, 0, 0, 0, 1);
+	
 	trackball_.GetView();
 	trackball_.Apply();
 
-	glTranslatef(-max_bbox_.center().x, -max_bbox_.center().y, -max_bbox_.center().z);
+	glScaled(scale_, scale_, scale_);
+	glTranslatef(-bed_shape_.center().x, -bed_shape_.center().y, 0);
+	gluLookAt(trackball_.center.X(), trackball_.center.Y() - 1, trackball_.center.Z() + 1,
+		trackball_.center.X(), trackball_.center.Y(), trackball_.center.Z(),
+		0, 0, 1);
+	
 
 	if (enable_picking_) {
 		glDisable(GL_LIGHTING);
@@ -116,15 +126,24 @@ void ModelWidget::paintGL() {
 		GLbyte color[4];
 		glReadPixels(cur_mouse_x_, height() - cur_mouse_y_, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, &color);
 		int volume_index = color[0] + color[1] * 256 + color[2] * 256 * 256 - 1;
-		if (hovered_volume_index_ >= 0 && hovered_volume_index_ < volumes_.size()) {
-			volumes_[hovered_volume_index_].SetHover(false);
+		hovered_volume_index_ = -1;
+		for (SceneVolume& volume : volumes_) {
+			volume.SetHover(false);
 		}
-		if (volume_index >= 0 && volume_index < volumes_.size()) {
+		if (volume_index >= 0 && volume_index <= volumes_.size()) {
 			hovered_volume_index_ = volume_index;
+
 			volumes_[volume_index].SetHover(true);
-		}
-		else {
-			hovered_volume_index_ = -1;
+
+			int group_id = volumes_[volume_index].select_group_id_;
+			if (group_id != -1) {
+				for (SceneVolume& volume : volumes_) {
+					if (volume.select_group_id_ == group_id) {
+						volume.SetHover(true);
+					}
+				}
+			}
+
 		}
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glFlush();
@@ -135,15 +154,15 @@ void ModelWidget::paintGL() {
 	//绘制背景
 
 	//绘制坐标系
-	glDisable(GL_LIGHTING);
-	DrawXYZ();
-	glEnable(GL_LIGHTING);
+	
 	DrawBedShape();
 	DrawVolumes();
+	
+	glDisable(GL_LIGHTING);
+	DrawAxes();
+	glEnable(GL_LIGHTING);
 
-	
 	glPopMatrix();
-	
 }
 
 
@@ -154,37 +173,42 @@ void ModelWidget::resizeGL(int width, int height) {
 	glViewport(0, 0, static_cast<GLint>(width), static_cast<GLint>(height));
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
+	
+	Pointf3 bbox_size = max_bbox_.size();
+	double max_size = std::max(std::max(bbox_size.x, bbox_size.y), bbox_size.z)*10;
 
-	Pointf3 max_bbox_size = max_bbox_.size();
-	float max_size = std::max(std::max(max_bbox_size.x, max_bbox_size.y), max_bbox_size.z) * 2;
-	int min_viewport_size = std::min(width, height);
 
-	float zoom = min_viewport_size / max_size;
+	glOrtho(-width / (2 * scale_), width / (2 * scale_), -height / (2 * scale_),
+		height / (2 * scale_), -max_size, max_size*2);
 
-	float x = width / zoom;
-	float y = height / zoom;
-	float depth = std::max(std::max(max_bbox_size.x, max_bbox_size.y), max_bbox_size.z) * 2;
-	//glOrtho(-x / 2, x / 2, -y / 2, y / 2, -depth, depth * 2);
-	//glOrtho(-width / 2, width / 2, -height / 2, height / 2, -50, 50);
-	glOrtho(-280, 280, -280, 280, -280, 280);
+
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-	//gluLookAt(1, 1, 1, 0, 0, 0, 0, 0, 1);
+
+
+// 	if (volumes_.empty()) {
+// 		ZoomToBed();
+// 	}
+// 	else {
+// 		ZoomToVolumes();
+// 	}
+	LoadMaxBBox();
+	ZoomToBBox(max_bbox_);
 }
 
 
 void ModelWidget::InitModel() {
 	char* model_name = "3Dowllovely_face.stl";
-	LoadModel(model_name);
+	//LoadModel(model_name);
 }
 
 
-void ModelWidget::DrawXYZ()
+void ModelWidget::DrawAxes()
 {
 	glDisable(GL_DEPTH_TEST);
 
 	Pointf3 bbox_size = max_bbox_.size();
-	float axis_len = std::max(std::max(bbox_size.x, bbox_size.y), bbox_size.z) * 0.3;
+	float axis_len = std::max(std::max(bbox_size.x, bbox_size.y), bbox_size.z) * 0.8;
 
 	glLineWidth(2);
 	float fCursor[4];
@@ -211,6 +235,9 @@ void ModelWidget::DrawXYZ()
 
 
 
+/*
+ *	绘制模型
+ */
 void ModelWidget::DrawVolumes(bool fakecolor)const {
 
 	glEnableClientState(GL_VERTEX_ARRAY);
@@ -273,24 +300,11 @@ void ModelWidget::DrawBedShape()const {
 	glColor4f(0.8, 0.6, 0.5,0.4);
 	glNormal3d(1, 1, 1);
 	glDisable(GL_LIGHTING);
-
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
-	glLoadIdentity();
-
-	glBegin(GL_QUADS);
-	glColor3f(0, 0, 0);
-	glVertex2f(-1.0, -1.0);
-	glVertex2f(1, -1.0);
-	glColor3f(10 / 255.0, 98 / 255.0, 144 / 255.0);
-	glVertex2f(1, 1);
-	glVertex2f(-1.0, 1);
-	glEnd();
-
-	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
 	//glPopMatrix();
 
+	glColor4f(0.8, 0.6, 0.5, 0.4);
+	glNormal3d(0, 0, 1);
 	glBegin(GL_TRIANGLES);
 
 	glVertex3f(bed_shape_.min.x, bed_shape_.min.y, 0);
@@ -303,7 +317,7 @@ void ModelWidget::DrawBedShape()const {
 
 	glEnd();
 
-	glLineWidth(3);
+	glLineWidth(0.5);
 	glColor4f(0.2, 0.2, 0.2, 0.4);
 	glBegin(GL_LINES);
 	for (int i = 0; i <= 180; i += 10) {
@@ -360,7 +374,17 @@ void ModelWidget::mouseMoveEvent(QMouseEvent *event) {
 		UnProject(pre_mouse_x_, height() - pre_mouse_y_, prePos);
 
 		Pointf3 trans_vector(curPos.x - prePos.x, curPos.y - prePos.y, curPos.z - prePos.z);
-		volumes_[selected_volume_index_].Origin().translate(trans_vector.x, trans_vector.y,0);
+		
+
+		int group_id = volumes_[selected_volume_index_].drag_group_id_;
+		if (group_id != -1) {
+			for (SceneVolume& volume : volumes_) {
+				volume.Origin().translate(trans_vector.x, trans_vector.y, 0);
+			}
+		}
+		else {
+			volumes_[selected_volume_index_].Origin().translate(trans_vector.x, trans_vector.y, 0);
+		}
 	}
 	update();
 }
@@ -378,19 +402,29 @@ void ModelWidget::wheelEvent(QWheelEvent* event) {
 void ModelWidget::mousePressEvent(QMouseEvent* event) {
 	if (event->button() == Qt::LeftButton) {
 		left_pressed_ = true;
+		if (enable_picking_) {
+			selected_volume_index_ = hovered_volume_index_;
+			for (SceneVolume& volume : volumes_) {
+				volume.SetSelected(false);
+			}
+			if (selected_volume_index_ != -1) {
+				volumes_[selected_volume_index_].SetSelected(true);
+				int group_id = volumes_[selected_volume_index_].select_group_id_;
+				if (group_id != -1) {
+					for (SceneVolume& volume : volumes_) {
+						if (volume.select_group_id_ == group_id) {
+							volume.SetSelected(true);
+						}
+					}
+				}
+
+			}
+
+		}
 	}
-	else if (event->button() == Qt::RightButton) {
-		right_pressed_ = true;
+	if (selected_volume_index_ == -1) {
+		trackball_.MouseDown(event->x(), height() - event->y(), QT2VCG(event->button(), event->modifiers()));
 	}
-	if (selected_volume_index_ >= 0 && selected_volume_index_ < volumes_.size()) {
-		volumes_[selected_volume_index_].SetSelected(false);
-		selected_volume_index_ = -1;
-	}
-	if (hovered_volume_index_ >= 0 && hovered_volume_index_ < volumes_.size()) {
-		selected_volume_index_ = hovered_volume_index_;
-		volumes_[selected_volume_index_].SetSelected(true);
-	}
-	trackball_.MouseDown(event->x(), height() - event->y(), QT2VCG(event->button(), event->modifiers()));
 	update();
 }
 
@@ -448,55 +482,6 @@ void ModelWidget::contextMenuEvent(QContextMenuEvent *event) {
 }
 
 
-void ModelWidget::LoadModel(char* file_name) {
-	Pointf bed_size = bed_shape_.size();
-	Pointf bed_center = GetBedCenter();
-	Model temp_model = Model::read_from_file(file_name);
-	if (temp_model.objects.empty())
-		return;
-	for (ModelObject* object : temp_model.objects) {
-		ModelObject* added_object = model_.add_object(*object);
-		added_object->repair();
-
-		if (object->instances.size() == 0) {
-			need_arrange_ = true;
-			added_object->center_around_origin();
-			added_object->add_instance();
-			//added_object->instances[0]->SetOffset(bed_center);
-		}
-		else {
-			added_object->align_to_ground();
-		}
-
-// 		{
-// 			Pointf3 size = added_object->bounding_box().size();
-// 			double ratio = std::max(size.x, size.y) / unscale(std::max(bed_size.x, bed_size.y));
-// 
-// 			if (ratio > 5) {
-// 				for (ModelInstance* instance : added_object->instances) {
-// 					instance->SetScalingFactor(1 / ratio);
-// 				}
-// 			}
-// 		}
-		print_->auto_assign_extruders(added_object);
-		print_->add_model_object(added_object);
-	}
-	LoadVolumes();
-	if (need_arrange_)
-		ArrangeObjects();
-}
-
-void ModelWidget::LoadVolumes() {
-	volumes_.clear();
-	for (ModelObject* object : model_.objects) {
-		for (ModelVolume* model_volume : object->volumes) {
-			SceneVolume scene_volume;
-			scene_volume.SetBBox(model_volume->mesh.bounding_box());
-			scene_volume.LoadMesh(model_volume->mesh);
-			volumes_.push_back(scene_volume);
-		}
-	}
-}
 
 void ModelWidget::ReloadMaxBBox() {
 	max_bbox_.min = Pointf3(bed_shape_.min.x, bed_shape_.min.y, 0);
@@ -595,16 +580,28 @@ void ModelWidget::UnProject(int mouse_x, int mouse_y, Pointf3& world) {
 	glPopMatrix();
 }
 
+
 void ModelWidget::DeleteVolume() {
 	if (selected_volume_index_ == -1) {
 		return;
 	}
-	model_.delete_object(selected_volume_index_);
+
+	int object_index = volume_to_object_[selected_volume_index_].first.first;
+
+	model_->delete_object(object_index);
+	print_->delete_object(object_index);
+	ReloadVolumes();
+
+	//model_.delete_object(selected_volume_index_);
 	selected_volume_index_ = -1;
-	LoadVolumes();
+	//LoadVolumes();
 	update();
 }
 
+
+/*
+ *	对选中的打印对象绕X轴进行旋转
+ */
 void ModelWidget::RotateVolumeX() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
@@ -615,16 +612,35 @@ void ModelWidget::RotateVolumeX() {
 		2,
 		&ok);
 	if (ok) {
-		if (input_num == 0.00) {
+		if (input_num == 0.00 || selected_volume_index_ == -1) {
 			return;
 		}
-		model_.objects[selected_volume_index_]->rotate(input_num, Axis::X);
-		LoadVolumes();
+
+		int object_index = volume_to_object_[selected_volume_index_].first.first;
+		int instance_index = volume_to_object_[selected_volume_index_].second;
+
+		ModelObject* object = model_->objects[object_index];
+		ModelInstance* instance = object->instances[instance_index];
+
+		object->transform_by_instance(*instance, 1);
+
+		object->rotate(input_num, Axis::X);
+		object->center_around_origin();
+
+		object->update_bounding_box();
+		print_->add_model_object(object, object_index);
+		ReloadVolumes();
+		//model_.objects[selected_volume_index_]->rotate(input_num, Axis::Y);
+		//LoadVolumes();
 		update();
 	}
 	return;
 }
 
+
+/*
+ *	对选中的打印对象绕Y轴进行旋转
+ */
 void ModelWidget::RotateVolumeY() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
@@ -635,16 +651,35 @@ void ModelWidget::RotateVolumeY() {
 		2,
 		&ok);
 	if (ok) {
-		if (input_num == 0.00) {
+		if (input_num == 0.00||selected_volume_index_ == -1) {
 			return;
 		}
-		model_.objects[selected_volume_index_]->rotate(input_num, Axis::Y);
-		LoadVolumes();
+
+		int object_index = volume_to_object_[selected_volume_index_].first.first;
+		int instance_index = volume_to_object_[selected_volume_index_].second;
+
+		ModelObject* object = model_->objects[object_index];
+		ModelInstance* instance = object->instances[instance_index];
+
+		object->transform_by_instance(*instance, 1);
+
+		object->rotate(input_num, Axis::Y);
+		object->center_around_origin();
+
+		object->update_bounding_box();
+		print_->add_model_object(object, object_index);
+		ReloadVolumes();
+		//model_.objects[selected_volume_index_]->rotate(input_num, Axis::Y);
+		//LoadVolumes();
 		update();
 	}
 	return;
 }
 
+
+/*
+ *	对选中的打印对象绕Z轴进行旋转
+ */
 void ModelWidget::RotateVolumeZ() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
@@ -655,37 +690,75 @@ void ModelWidget::RotateVolumeZ() {
 		2,
 		&ok);
 	if (ok) {
-		if (input_num == 0.00) {
+		if (input_num == 0.00 ||selected_volume_index_ == -1) {
 			return;
 		}
-		model_.objects[selected_volume_index_]->rotate(input_num, Axis::Z);
-		LoadVolumes();
+
+		int object_index = volume_to_object_[selected_volume_index_].first.first;
+		
+		ModelObject* object = model_->objects[object_index];
+		for (ModelInstance* instance : object->instances) {
+			double rotation = instance->rotation;
+			instance->SetRotation(rotation + input_num);
+		}
+
+		object->update_bounding_box();
+		print_->add_model_object(object, object_index);
+
+		ReloadVolumes();
+		//model_.objects[selected_volume_index_]->rotate(input_num, Axis::Z);
+		//LoadVolumes();
 		update();
 	}
 	return;
 }
 
+
+/*
+ *	对打印对象做镜像操作
+ */
 void ModelWidget::MirrorVolumeX() {
-	model_.objects[selected_volume_index_]->mirror(Axis::X);
-	LoadVolumes();
-	update();
+	MirrorVolume(Axis::X);
 }
 
 void ModelWidget::MirrorVolumeY() {
-	model_.objects[selected_volume_index_]->mirror(Axis::Y);
-	LoadVolumes();
-	update();
+	MirrorVolume(Axis::Y);
 }
 
 void ModelWidget::MirrorVolumeZ() {
-	model_.objects[selected_volume_index_]->mirror(Axis::Z);
-	model_.objects[selected_volume_index_]->update_bounding_box();
-	//更新print内的model object
-	print_->add_model_object(model_.objects[selected_volume_index_], selected_volume_index_);
-	LoadVolumes();
+	MirrorVolume(Axis::Z);
+}
+
+
+/*
+ *	对选中的打印对象进行镜像操作
+ */
+void ModelWidget::MirrorVolume(Axis axis) {
+	if (selected_volume_index_ == -1) return;
+
+	int selected_obj_idx = volume_to_object_[selected_volume_index_].first.first;
+	int selected_instance_idx = volume_to_object_[selected_volume_index_].second;
+
+	ModelObject* object = model_->objects[selected_obj_idx];
+	ModelInstance* instance = object->instances[selected_instance_idx];
+
+	object->transform_by_instance(*instance, 1);
+
+	model_->objects[selected_obj_idx]->mirror(axis);
+	object->update_bounding_box();
+	object->center_around_origin();
+
+	print_->add_model_object(object, selected_obj_idx);
+
+	//model_->center_instances_around_point(bed_shape_.center());
+	//model_->objects[selected_volume_index_]->mirror(Axis::X);
+	ReloadVolumes();
 	update();
 }
 
+/*
+ *	对打印对象等比缩放
+ */
 void ModelWidget::ScaleVolumeUniformly() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
@@ -696,16 +769,27 @@ void ModelWidget::ScaleVolumeUniformly() {
 		2,
 		&ok);
 	if (ok) {
-		if (input_num == 0.00 || input_num == 100.00) {
+		if (input_num == 0.00 || input_num == 100.00||selected_volume_index_ == -1) {
 			return;
 		}
-		model_.objects[selected_volume_index_]->scale(Pointf3(input_num/100.0, input_num/100.0, input_num/100.0));
-		LoadVolumes();
+		int selected_object_index = volume_to_object_[selected_volume_index_].first.first;
+		ModelObject* object = model_->objects[selected_object_index];
+		for (ModelInstance* instance : object->instances) {
+			instance->SetScalingFactor(input_num / 100.0);
+		}
+
+		object->update_bounding_box();
+		print_->add_model_object(object, selected_object_index);
+		ReloadVolumes();
 		update();
 	}
 	return;
 }
 
+
+/*
+ *	对打印对象沿X轴缩放
+ */
 void ModelWidget::ScaleVolumeX() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
@@ -716,16 +800,33 @@ void ModelWidget::ScaleVolumeX() {
 		2,
 		&ok);
 	if (ok) {
-		if (input_num == 0.00 || input_num == 100.00) {
+		if (input_num == 0.00 || input_num == 100.00||selected_volume_index_ == -1) {
 			return;
 		}
-		model_.objects[selected_volume_index_]->scale(Pointf3(input_num / 100.0, 1, 1));
-		LoadVolumes();
+		
+
+		int selected_object_idx = volume_to_object_[selected_volume_index_].first.first;
+		int selected_instance_idx = volume_to_object_[selected_volume_index_].second;
+
+		ModelObject* object = model_->objects[selected_object_idx];
+		ModelInstance* instance = object->instances[selected_instance_idx];
+
+		object->transform_by_instance(*instance, 1);
+		object->scale(Pointf3(input_num / 100.0, 1, 1));
+
+		object->update_bounding_box();
+		print_->add_model_object(object, selected_object_idx);
+		ReloadVolumes();
 		update();
+
 	}
 	return;
 }
 
+
+/*
+ *	对打印对象沿Y轴方向缩放
+ */
 void ModelWidget::ScaleVolumeY() {
 	bool ok;
 	double input_num = QInputDialog::getDouble(this,
@@ -736,11 +837,23 @@ void ModelWidget::ScaleVolumeY() {
 		2,
 		&ok);
 	if (ok) {
-		if (input_num == 0.00 || input_num == 100.00) {
+		if (input_num == 0.00 || input_num == 100.00 || selected_volume_index_ == -1) {
 			return;
 		}
-		model_.objects[selected_volume_index_]->scale(Pointf3(1, input_num/100.0, 1));
-		LoadVolumes();
+
+
+		int selected_object_idx = volume_to_object_[selected_volume_index_].first.first;
+		int selected_instance_idx = volume_to_object_[selected_volume_index_].second;
+
+		ModelObject* object = model_->objects[selected_object_idx];
+		ModelInstance* instance = object->instances[selected_instance_idx];
+
+		object->transform_by_instance(*instance, 1);
+		object->scale(Pointf3(1, input_num / 100.0, 1));
+
+		object->update_bounding_box();
+		print_->add_model_object(object, selected_object_idx);
+		ReloadVolumes();
 		update();
 	}
 	return;
@@ -756,18 +869,30 @@ void ModelWidget::ScaleVolumeZ() {
 		2,
 		&ok);
 	if (ok) {
-		if (input_num == 0.00 || input_num == 100.00) {
+		if (input_num == 0.00 || input_num == 100.00 || selected_volume_index_ == -1) {
 			return;
 		}
-		model_.objects[selected_volume_index_]->scale(Pointf3(1, 1, input_num / 100.0));
-		LoadVolumes();
+
+
+		int selected_object_idx = volume_to_object_[selected_volume_index_].first.first;
+		int selected_instance_idx = volume_to_object_[selected_volume_index_].second;
+
+		ModelObject* object = model_->objects[selected_object_idx];
+		ModelInstance* instance = object->instances[selected_instance_idx];
+
+		object->transform_by_instance(*instance, 1);
+		object->scale(Pointf3(1, 1, input_num / 100.0));
+
+		object->update_bounding_box();
+		print_->add_model_object(object, selected_object_idx);
+		ReloadVolumes();
 		update();
 	}
 	return;
 }
 
 void ModelWidget::ReloadAllVolumes() {
-	LoadVolumes();
+	//LoadVolumes();
 	update();
 }
 
@@ -780,21 +905,148 @@ void ModelWidget::AlignObjectToGround(ModelObject* new_object) {
 	new_object->origin_translation.translate(0, 0, -bb.min.z);
 }
 
+void ModelWidget::ReloadVolumes() {
+	ResetVolumes();
+	
+	LoadBedShape();
+
+	for (int obj_idx = 0; obj_idx < model_->objects.size(); obj_idx++) {
+		LoadModelObject(obj_idx);
+	}
+
+	LoadMaxBBox();
+	//ZoomToVolumes();
+	ZoomToBBox(max_bbox_);
+}
 
 
 /*
-	开始处理模型
-*/
-void ModelWidget::BackgroundProcess() {
-	print_->Process();
+ *	载入底板形状
+ */
+void ModelWidget::LoadBedShape() {
+	bed_shape_ = BoundingBoxf(print_->config.bed_shape.values);
+}
+
+/*
+ *	清空所有的volumes
+ */
+void ModelWidget::ResetVolumes() {
+	volumes_.clear();
+}
+
+
+
+
+/*
+ *	导入ModelObject
+ */
+void ModelWidget::LoadModelObject(int object_idx) {
+	ModelObject* object = model_->objects[object_idx];
+
+	std::vector<int> volumes_idx;
+	for (int volume_idx = 0; volume_idx < object->volumes.size(); volume_idx++) {
+		ModelVolume* volume = object->volumes[volume_idx];
+		for (int instance_idx = 0; instance_idx < object->instances.size(); instance_idx++) {
+			ModelInstance* instance = object->instances[instance_idx];
+
+			TriangleMesh mesh = volume->mesh;
+			instance->transform_mesh(&mesh);
+
+
+			int color_idx;
+			if (color_by_ == color_by_volume) {
+				color_idx = volume_idx;
+			}
+			else {
+				color_idx = object_idx;
+			}
+
+			const float *color = COLORS[color_idx % 4];
+
+			SceneVolume volume;
+			volume.bbox_ = mesh.bounding_box();
+			volume.color[0] = color[0];	volume.color[1] = color[1];
+			volume.color[2] = color[2];	volume.color[3] = color[3];
+
+			//设置select by group id
+			if (select_by_ == select_by_object) {
+				volume.select_group_id_ = object_idx * 1000000;
+			}
+			else if (select_by_ == select_by_volume) {
+				volume.select_group_id_ = object_idx * 1000000 + volume_idx * 1000;
+			}
+			else {
+				volume.select_group_id_ = object_idx * 1000000 + volume_idx * 1000 + instance_idx;
+			}
+
+			//设置drag by group id
+			if (drag_by_ == drag_by_object) {
+				volume.drag_group_id_ = object_idx * 1000;
+			}
+			else {
+				volume.drag_group_id_ = object_idx * 1000 + instance_idx;
+			}
+
+			volume.LoadMesh(mesh);
+
+			volumes_.push_back(volume);
+			
+			int scenevolume_index = volumes_.size();
+			volumes_idx.push_back(scenevolume_index);
+			volume_to_object_[scenevolume_index] = { {object_idx,volume_idx},instance_idx };
+			
+		}
+	}
+	object_to_volumes_[object_idx] = volumes_idx;
 }
 
 
 
 /*
- *	对打印对象进行重新布局
+ *	对BoundingBox进行缩放
  */
-void ModelWidget::ArrangeObjects() {
-	model_.arrange_objects(print_->config.min_object_distance(), &bed_shape_);
-	LoadVolumes();
+void ModelWidget::ZoomToBBox(BoundingBoxf3& bbox) {
+	Pointf3 bbox_size = bbox.size();
+	double max_size = std::max(std::max(bbox_size.x, bbox_size.y), bbox_size.z)*1.1;
+	int min_viewport_size = std::min(width(), height());
+
+	if (max_size != 0) {
+		trackball_.radius = std::min(std::min(bbox_size.x,bbox_size.y),bbox_size.z);
+		scale_ = min_viewport_size / max_size;
+		//glTranslatef(-bbox.center().x, -bbox.center().y, 0);
+	}
+}
+
+
+void ModelWidget::ZoomToVolumes() {
+	BoundingBoxf3 bbox;
+
+	for (SceneVolume& volume : volumes_) {
+		bbox.merge(volume.TransformedBBox());
+	}
+
+	ZoomToBBox(bbox);
+}
+
+void ModelWidget::ZoomToBed() {
+	BoundingBoxf3 bbox;
+	
+	bbox.merge(Pointf3(bed_shape_.min.x, bed_shape_.min.y, 0));
+	bbox.merge(Pointf3(bed_shape_.max.x, bed_shape_.max.y, 0));
+	trackball_.radius = std::min(bbox.size().x, bbox.size().y);
+
+	ZoomToBBox(bbox);
+}
+
+
+/*
+ *	计算最大Bouding Box(包括Bed Shape和Scene Volumes)
+ */
+void ModelWidget::LoadMaxBBox() {
+	max_bbox_.min = Pointf3(bed_shape_.min.x, bed_shape_.min.y, 0);
+	max_bbox_.max = Pointf3(bed_shape_.max.x, bed_shape_.max.y, 0);
+
+	for (SceneVolume& volume : volumes_) {
+		max_bbox_.merge(volume.TransformedBBox());
+	}
 }

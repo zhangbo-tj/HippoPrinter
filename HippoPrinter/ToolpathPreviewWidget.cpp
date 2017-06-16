@@ -6,10 +6,12 @@
 #include <QMouseEvent>
 #include <QContextMenuEvent>
 #include <QOpenGLFunctions>
+#include <QGLFunctions>
 
 #include <unordered_map>
 
 #include <GL\glut.h>
+
 
 #include <src/slic3r/GUI/3DScene.hpp>
 
@@ -23,17 +25,21 @@ const float HOVER_COLOR[4] = { 0.4,0.9,0,1 };
  *	构造函数
  *  参数为Print指针
  */
-ToolpathPreviewWidget::ToolpathPreviewWidget(Print* print,QWidget* parent)
+ToolpathPreviewWidget::ToolpathPreviewWidget(Print* print, 
+	std::map<int, double>* layer_values, QWidget* parent)
 	:QGLWidget(parent),
 	loaded_(false),
 	color_toolpaths_by_(ctRole),
-	min_z_(-1), max_z_(-1)
+	min_z_(-1), max_z_(-1),scale_(1)
 {
 	print_ = print;
+	layer_values_ = layer_values;
+
+	LoadBedShape();
+	ResetVolumes();
+	
 	setMouseTracking(true);
 
-	bbox_.defined = true;
-	SetDefaultBedshape();
 
 	InitActions();
 }
@@ -55,10 +61,27 @@ void ToolpathPreviewWidget::initializeGL() {
 	glColor3f(1, 0, 0);
 	glEnable(GL_DEPTH_TEST);
 	glClearDepth(1.0);
+	//glDepthMask(GL_TRUE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthRange(0.0f, 1.0f);
+	
+
+	GLfloat material_ambient[] = { 0.3,0.3,0.3,1 };
+	GLfloat material_specular[] = { 1,1,1,1 };
+	GLfloat material_shiness = 50;
+	GLfloat material_emission[] = { 0.1,0.1,0.1,0.9 };
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, material_ambient);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, material_specular);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, material_shiness);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, material_emission);
+
 	glEnable(GL_COLOR_MATERIAL);
+	glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 	glEnable(GL_MULTISAMPLE);
 
-	glDisable(GL_BLEND);
+	//glEnable(GL_BLEND);
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 	glEnable(GL_NORMALIZE);
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
@@ -67,14 +90,7 @@ void ToolpathPreviewWidget::initializeGL() {
 	glEnable(GL_LIGHTING);
 	glEnable(GL_LIGHT0);
 	//glEnable(GL_LIGHT1);
-	GLfloat light_model_ambient0[] = { 0.3,0.3,0.3,1 };
-	GLfloat light0_diffuse0[] = { 0.5,0.5,0.5,1 };
-	GLfloat light_specular0[] = { 0.2,0.2,0.2,1 };
-	GLfloat light_position0[] = { -0.5,-0.5,1,0 };
-	glLightfv(GL_LIGHT0, GL_POSITION, light_position0);
-	glLightfv(GL_LIGHT0, GL_AMBIENT, light_model_ambient0);
-	glLightfv(GL_LIGHT0, GL_DIFFUSE, light0_diffuse0);
-	glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular0);
+
 
 	GLfloat light_model_ambient1[] = { 0.3,0.3,0.3,1 };
 	GLfloat light0_diffuse1[] = { 0.2,0.2,0.2,1 };
@@ -85,10 +101,14 @@ void ToolpathPreviewWidget::initializeGL() {
 	glLightfv(GL_LIGHT1, GL_DIFFUSE, light0_diffuse1);
 	glLightfv(GL_LIGHT1, GL_SPECULAR, light_specular1);
 
-	trackball_.center = vcg::Point3f(0, 0, 0);
-	trackball_.radius = 50;
+	//trackball_.center = vcg::Point3f(0, 0, 0);
+	//trackball_.radius = 50;
+	
 
 	glLoadIdentity();
+	//gluLookAt(1, 1, 1, 0, 0, 0, 0, 0, 1);
+
+	ZoomToBed();
 }
 
 
@@ -101,33 +121,49 @@ void ToolpathPreviewWidget::paintGL() {
 	glDepthFunc(GL_LESS);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	GLfloat light_model_ambient0[] = { 0.3,0.3,0.3,1 };
+	GLfloat light0_diffuse0[] = { 0.5,0.5,0.5,1 };
+	GLfloat light_specular0[] = { 0.2,0.2,0.2,1 };
+	GLfloat light_position0[] = { -0.5,-0.5,1,0 };
+	glLightfv(GL_LIGHT0, GL_POSITION, light_position0);
+	glLightfv(GL_LIGHT0, GL_AMBIENT, light_model_ambient0);
+	glLightfv(GL_LIGHT0, GL_DIFFUSE, light0_diffuse0);
+	glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular0);
+
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 
 	glPushMatrix();
 
-	gluLookAt(0.06, 0, 0.1, 0, 1, 0, 0, 0, 1);
+	//gluLookAt(0.06, 0, 0.1, 0, 1, 0, 0, 0, 1);
 	trackball_.GetView();
 	trackball_.Apply();
 
-	glTranslatef(-bbox_.center().x, -bbox_.center().y, -bbox_.center().z);
-
+	glScaled(scale_, scale_, scale_);
+	glTranslatef(-bed_shape_.center().x, -bed_shape_.center().y, 0);
+	gluLookAt(trackball_.center.X(), trackball_.center.Y() - 1, trackball_.center.Z() + 1,
+		trackball_.center.X(), trackball_.center.Y(), trackball_.center.Z(),
+		0, 0, 1);
 
 	//绘制背景
 
 	//绘制坐标系
+
+
+	//绘制底板5
+	glEnable(GL_LIGHTING);
+	DrawBedShape();
 	glDisable(GL_LIGHTING);
 	DrawAxes();
+
+
 	glEnable(GL_LIGHTING);
-
-	//绘制底板
-	DrawBedShape();
-
 	//绘制打印路径
 	DrawVolumes();
-
+	
 
 	glPopMatrix();
+
 }
 
 
@@ -142,34 +178,32 @@ void ToolpathPreviewWidget::resizeGL(int width, int height) {
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 
-	Pointf3 max_bbox_size = bbox_.size();
-	float max_size = std::max(std::max(max_bbox_size.x, max_bbox_size.y), max_bbox_size.z) * 2;
-	int min_viewport_size = std::min(width, height);
 
-	float zoom = min_viewport_size / max_size;
-
-	float x = width / zoom;
-	float y = height / zoom;
-	float depth = std::max(std::max(max_bbox_size.x, max_bbox_size.y), max_bbox_size.z) * 2;
-	//glOrtho(-x / 2, x / 2, -y / 2, y / 2, -depth, depth * 2);
-	//glOrtho(-width / 2, width / 2, -height / 2, height / 2, -50, 50);
-	glOrtho(-280, 280, -280, 280, -280, 280);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	//gluLookAt(1, 1, 1, 0, 0, 0, 0, 0, 1);
+	Pointf3 bbox_size = max_bbox_.size();
+	double depth = std::max(std::max(bbox_size.x, bbox_size.y), bbox_size.z) * 10;
+	glOrtho(-width/(2*scale_), width /(2*scale_), 
+		-height/(2*scale_), height /(2*scale_), 
+		-depth, depth * 2);
+	
+	LoadMaxBBox();
+	ZoomToBBox(max_bbox_);
 }
 
 
 /*
  *	重新载入打印路径
  */
-void ToolpathPreviewWidget::ReloadPrint() {
+void ToolpathPreviewWidget::ReloadVolumes() {
 	ResetVolumes();		//清空当前的打印路径
 	max_z_ = -1;
 	loaded_ = false;
 	LoadPrint();		//载入Print对象的打印路径
-	update();
+	//update();
+	LoadBedShape();
+	LoadMaxBBox();
+	ZoomToVolumes();
 }
+
 
 
 /*
@@ -177,6 +211,7 @@ void ToolpathPreviewWidget::ReloadPrint() {
  */
 void ToolpathPreviewWidget::ResetVolumes() {
 	volumes_.clear();
+	layer_values_->clear();
 }
 
 
@@ -202,7 +237,7 @@ void ToolpathPreviewWidget::LoadPrint() {
 	//存储<layer_id, print_z>，方便后期通过layer_id获取print_z
 	auto iterator = values.begin();
 	for (int i = 0; i < values.size(); i++) {
-		layer_values_[i] = *iterator;
+		(*layer_values_)[i] = *iterator;
 		++iterator;
 	}
 
@@ -217,7 +252,7 @@ void ToolpathPreviewWidget::LoadPrint() {
 
 	//设置显示的上界为整个模型的Bouding box
 	min_z_ = 0;
-	max_z_ = layer_values_[values.size() - 1];
+	max_z_ = (*layer_values_)[values.size() - 1];
 }
 
 
@@ -248,7 +283,7 @@ void ToolpathPreviewWidget::LoadPrintObjectToolpaths(const PrintObject* object) 
 	long alloc_size_max = 32 * 1048576 / 4;
 
 	//是否按照extruder对打印路径进行染色
-	bool color_toolpaths_by_extruder = color_toolpaths_by_ == ctExtruder;
+	bool color_toolpaths_by_extruder = (color_toolpaths_by_ == ctExtruder);
 
 	//分别将每一层上的每一个reigion内的打印路径添加进来
 	for (Layer* layer : layers) {
@@ -314,7 +349,7 @@ void ToolpathPreviewWidget::LoadPrintObjectToolpaths(const PrintObject* object) 
  *  如果已经存在该color_index对应的SceneVolume对象，就直接在其qverts上添加内容
  *  如果当前不存在该color_index对应的SceneVolume对象，则添加新的SceneVolume对象
  */
-void ToolpathPreviewWidget::AddScenevolume(ExtrusionEntityCollection& entities, coordf_t top_z,
+void ToolpathPreviewWidget::AddScenevolume(ExtrusionEntityCollection& entities, double top_z,
 	const Point& copy,int color_index,BoundingBoxf3& bbox) {
 
 	//当前已经存在该color_index对应的对象，则直接添加其qverts和tverts的内容
@@ -338,8 +373,8 @@ void ToolpathPreviewWidget::AddScenevolume(ExtrusionEntityCollection& entities, 
 		SceneVolume volume;
 		volume.color[0] = COLORS[color_index][0]; volume.color[1] = COLORS[color_index][1];
 		volume.color[2] = COLORS[color_index][2]; volume.color[3] = COLORS[color_index][3];
-
-		volume.offsets[0] = { 0,0 };
+		volume.bbox_ = bbox;
+		volume.offsets[0.0] = { 0,0 };
 
 		
 
@@ -356,19 +391,6 @@ void ToolpathPreviewWidget::AddScenevolume(ExtrusionEntityCollection& entities, 
 		color_volumeidx[color_index] = volumes_.size() - 1;
 	}
 }
-
-
-// void ToolpathPreviewWidget::ExtrusionentitiesToVerts(ExtrusionEntityCollection& entities, coordf_t top_z,
-// 	const Point& copy, SceneVolume& scenevolume) {
-// 	for (ExtrusionEntity* entity : entities.entities) {
-// 		if (entity->is_loop()) {
-// 			ExtrusionLoopToVerts(dynamic_cast<ExtrusionLoop&>(*entity), top_z, copy, scenevolume);
-// 		}
-// 		else {
-// 			//ExtrusionPathToVerts(dynamic_cast<ExtrusionPath&>(*entity), top_z, copy, scenevolume);
-// 		}
-// 	}
-// }
 
 
 /*
@@ -426,31 +448,6 @@ void ToolpathPreviewWidget::ExtrusionEntityToVerts(ExtrusionEntity& entity, coor
 }
 
 
-
-
-// void ToolpathPreviewWidget::ExtrusionLoopToVerts(ExtrusionLoop& loop, coordf_t top_z,
-// 	const Point& copy, SceneVolume& volume) {
-// 
-// 	std::vector<double> widths;
-// 	std::vector<double> heights;
-// 	std::vector<Line> lines;
-// 
-// 	for (ExtrusionPath& path : loop.paths) {
-// 		Slic3r::Polyline polyline = path.polyline;
-// 		polyline.remove_duplicate_points();
-// 		polyline.translate(copy);
-// 		Slic3r::Lines path_lines = polyline.lines();
-// 		
-// 		lines.insert(lines.end(), path_lines.begin(), path_lines.end());
-// 		widths.insert(widths.end(), path_lines.size(), path.width);
-// 		heights.insert(heights.end(), path_lines.size(), path.height);
-// 	}
-// 
-// 	bool closed = true;
-// 
-// 	_3DScene::_extrusionentity_to_verts_do(lines, widths, heights, closed,
-// 		top_z, copy, &volume.qverts_, &volume.tverts_);
-// }
 
 
 ///将Qt鼠标键盘事件转换为VCG库内的鼠标键盘事件
@@ -530,6 +527,7 @@ void ToolpathPreviewWidget::contextMenuEvent(QContextMenuEvent* event) {
 	right_click_menu_->clear();
 
 	right_click_menu_->addAction(reset_trackball_action_);
+	right_click_menu_->exec(QCursor::pos());
 }
 
 
@@ -558,10 +556,21 @@ void ToolpathPreviewWidget::ResetTrackball() {
  *	绘制打印路径对象SceneVolumes
  */
 void ToolpathPreviewWidget::DrawVolumes()  {
+
+	glDepthFunc(GL_LESS);
+	glEnable(GL_DEPTH_TEST);
+	
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_BLEND);
+
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_NORMAL_ARRAY);
-
-	for (SceneVolume& volume : volumes_){
+	
+	glEnable(GL_CULL_FACE);
+	//glDrawBuffer(GL_FRONT);
+	for(SceneVolume& volume: volumes_){
+	//for(int i = volumes_.size() - 1; i >= 0; i--){
+		//SceneVolume& volume = volumes_[i];
 		glPushMatrix();
 
 		//平移操作
@@ -598,8 +607,9 @@ void ToolpathPreviewWidget::DrawVolumes()  {
 
 		//绘制三维模型
 		//绘制Quads
+		
+		glCullFace(GL_BACK);
 		if (!volume.qverts_.verts.empty()) {
-			glCullFace(GL_BACK);
 			glVertexPointer(3, GL_FLOAT, 0, volume.qverts_.verts.data());
 			glNormalPointer(GL_FLOAT, 0, volume.qverts_.norms.data());
 			glDrawArrays(GL_QUADS, min_qverts_offset/3, (max_qverts_offset- min_qverts_offset)/ 3);
@@ -607,7 +617,7 @@ void ToolpathPreviewWidget::DrawVolumes()  {
 
 		//绘制Triangles
 		if (!volume.tverts_.verts.empty()) {
-			glCullFace(GL_BACK);
+			
 			glVertexPointer(3, GL_FLOAT, 0, volume.tverts_.verts.data());
 			glNormalPointer(GL_FLOAT, 0, volume.tverts_.norms.data());
 			glDrawArrays(GL_TRIANGLES, min_tverts_offset / 3, (max_tverts_offset - min_tverts_offset) / 3);
@@ -618,6 +628,8 @@ void ToolpathPreviewWidget::DrawVolumes()  {
 
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_NORMAL_ARRAY);
+
+	glDisable(GL_BLEND);
 }
 
 
@@ -628,9 +640,8 @@ void ToolpathPreviewWidget::DrawVolumes()  {
 void ToolpathPreviewWidget::DrawAxes() const{
 	glDisable(GL_DEPTH_TEST);
 
-	//坐标轴的长度
-	Pointf3 bbox_size = bbox_.size();
-	float axis_len = std::max(std::max(bbox_size.x, bbox_size.y), bbox_size.z) * 0.3;
+	Pointf3 bbox_size = max_bbox_.size();
+	float axis_len = std::max(std::max(bbox_size.x, bbox_size.y), bbox_size.z) * 0.8;
 
 	glLineWidth(2);
 	float fCursor[4];
@@ -668,23 +679,13 @@ void ToolpathPreviewWidget::DrawBedShape() const{
 	glNormal3d(1, 1, 1);
 	glDisable(GL_LIGHTING);
 
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
-	glLoadIdentity();
-
-	glBegin(GL_QUADS);
-	glColor3f(0, 0, 0);
-	glVertex2f(-1.0, -1.0);
-	glVertex2f(1, -1.0);
-	glColor3f(10 / 255.0, 98 / 255.0, 144 / 255.0);
-	glVertex2f(1, 1);
-	glVertex2f(-1.0, 1);
-	glEnd();
-
-	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
 	//glPopMatrix();
 
+	glEnable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glColor4f(0.8, 0.6, 0.5, 0.4);
+	glNormal3d(0, 0, 1);
 	glBegin(GL_TRIANGLES);
 
 	glVertex3f(bed_shape_.min.x, bed_shape_.min.y, 0);
@@ -697,7 +698,10 @@ void ToolpathPreviewWidget::DrawBedShape() const{
 
 	glEnd();
 
-	glLineWidth(3);
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+
+	glLineWidth(0.5);
 	glColor4f(0.2, 0.2, 0.2, 0.4);
 	glBegin(GL_LINES);
 	for (int i = 0; i <= 180; i += 10) {
@@ -718,41 +722,67 @@ void ToolpathPreviewWidget::DrawBedShape() const{
 }
 
 
-/*
- *	设置底板形状
- */
-void ToolpathPreviewWidget::SetBedshape(const BoundingBoxf& bed) {
-	bed_shape_ = bed;
-	ReloadBBox();
-}
-
-
-/*
- *	设置默认的底板形状（280，180）
- */
-void ToolpathPreviewWidget::SetDefaultBedshape() {
-	bed_shape_ = BoundingBoxf(Pointf(0, 0), Pointf(280, 180));
-	ReloadBBox();
-}
-
-/*
- *	重新计算控件的BoundingBox
- */
-void ToolpathPreviewWidget::ReloadBBox() {
-	bbox_.min = Pointf3(bed_shape_.min.x, bed_shape_.min.y, 0);
-	bbox_.max = Pointf3(bed_shape_.max.x, bed_shape_.max.y, 0);
-
-	for (SceneVolume volume : volumes_) {
-		bbox_.merge(volume.BBox());
-	}
-}
-
 
 /*
  *	设置当前模型的显示上下界
  */
 void ToolpathPreviewWidget::SetLayerZ(int layer) {
 	if (volumes_.empty()) return;
-	max_z_ = layer_values_[layer-1];
+
+	max_z_ = (*layer_values_)[layer-1];
 	update();
+}
+
+
+void ToolpathPreviewWidget::LoadBedShape() {
+	bed_shape_ = BoundingBoxf(print_->config.bed_shape.values);
+}
+
+void ToolpathPreviewWidget::ZoomToBed() {
+	BoundingBoxf3 bbox;
+	bbox.merge(Pointf3(bed_shape_.min.x, bed_shape_.min.y, 0));
+	bbox.merge(Pointf3(bed_shape_.max.x, bed_shape_.max.y, 0));
+
+	ZoomToBBox(bbox);
+}
+
+void ToolpathPreviewWidget::ZoomToBBox(BoundingBoxf3& bbox) {
+// 	Pointf3 bbox_size = bbox.size();
+// 	double max_size = std::max(std::max(bbox_size.x, bbox_size.y), bbox_size.z)*1.5;
+// 	int min_viewport_size = std::min(width(), height());
+// 
+// 	if (max_size != 0) {
+// 		trackball_.radius = std::min(bbox_size.x, bbox_size.y);
+// 		glScaled(max_size / min_viewport_size, max_size / min_viewport_size, max_size / min_viewport_size);
+// 		glTranslatef(-bbox.center().x, -bbox.center().y, 0);
+// 	}
+	Pointf3 bbox_size = bbox.size();
+	double max_size = std::max(std::max(bbox_size.x, bbox_size.y), bbox_size.z);
+	int min_viewport_size = std::min(width(), height());
+
+	
+
+	if (max_size != 0) {
+		trackball_.radius = std::min(bbox_size.x, bbox_size.y);
+		scale_ = min_viewport_size / max_size*1.05;
+	}
+}
+
+void ToolpathPreviewWidget::ZoomToVolumes() {
+	BoundingBoxf3 bbox;
+
+	for (SceneVolume& volume : volumes_) {
+		bbox.merge(volume.TransformedBBox());
+	}
+
+	ZoomToBBox(bbox);
+}
+
+void ToolpathPreviewWidget::LoadMaxBBox() {
+	max_bbox_.min = Pointf3(bed_shape_.min.x, bed_shape_.min.y, 0);
+	max_bbox_.max = Pointf3(bed_shape_.max.x, bed_shape_.max.y, 0);
+
+	for (SceneVolume& volume : volumes_) {
+		max_bbox_.merge(volume.TransformedBBox());
+	}
 }

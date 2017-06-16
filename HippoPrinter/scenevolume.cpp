@@ -3,7 +3,8 @@
 
 
 SceneVolume::SceneVolume()
-	:origin_(0, 0, 0), selected_(false), hover_(false){
+	:origin_(0, 0, 0), selected_(false), hover_(false),
+	select_group_id_(-1),drag_group_id_(-1){
 }
 
 
@@ -17,6 +18,12 @@ const BoundingBoxf3& SceneVolume::BBox()const {
 
 BoundingBoxf3& SceneVolume::BBox() {
 	return bbox_;
+}
+
+BoundingBoxf3 SceneVolume::TransformedBBox() {
+	BoundingBoxf3 bbox = bbox_;
+	bbox.translate(origin_.x,origin_.y,origin_.z);
+	return bbox;
 }
 
 void SceneVolume::SetBBox(const BoundingBoxf3& bbox){

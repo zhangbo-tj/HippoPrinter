@@ -20,6 +20,13 @@ FilamentConfigWidget::FilamentConfigWidget(QWidget* parent)
 {
 	InitWidgets();
 	InitLayout();
+	setStyleSheet(
+		"QWidget{font-size:12pt;}"
+		"QGroupBox{font-size:16pt; background-color:papayawhip; padding:10px;margin:20px;}"
+		"QSpinBox{min-height:30px;}"
+		"QComboBox{min-height:30px;}"
+		"QDoubleSpinBox{min-height:30px;}"
+	);
 }
 
 //************************************************************************
@@ -28,8 +35,8 @@ FilamentConfigWidget::FilamentConfigWidget(QWidget* parent)
 // 功能:析构函数
 //************************************************************************
 
-FilamentConfigWidget::~FilamentConfigWidget()
-{
+FilamentConfigWidget::~FilamentConfigWidget(){
+
 }
 
 //TODO:参数初始化为之前设置的值
@@ -41,7 +48,7 @@ FilamentConfigWidget::~FilamentConfigWidget()
 
 void FilamentConfigWidget::InitWidgets() {
 	//初始化布局
-	filacofig_main_layout_ = new QVBoxLayout();
+	filacofig_main_layout_ = new QGridLayout();
 	filacofig_main_layout_->setSpacing(30);
 	fila_config_layout_ = new QGridLayout();
 	fila_config_layout_->setSpacing(20);
@@ -130,8 +137,9 @@ void FilamentConfigWidget::InitLayout() {
 	temp_config_groupbox_->setLayout(temp_config_layout_);
 
 	//初始化控件全局布局
-	filacofig_main_layout_->addWidget(fila_config_groupbox_);
-	filacofig_main_layout_->addWidget(temp_config_groupbox_);
-	filacofig_main_layout_->addStretch(1);
+	filacofig_main_layout_->addWidget(fila_config_groupbox_,0,0);
+	filacofig_main_layout_->addWidget(temp_config_groupbox_,0,1);
+	filacofig_main_layout_->setRowStretch(0, 1);
+	filacofig_main_layout_->setRowStretch(1, 2);
 	setLayout(filacofig_main_layout_);
 }

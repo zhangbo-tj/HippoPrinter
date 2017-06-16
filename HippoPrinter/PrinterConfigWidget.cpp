@@ -19,6 +19,13 @@ PrinterConfigWidget::PrinterConfigWidget(QWidget* parent)
 	:QWidget(parent){
 	InitWidgets();	//初始化控件
 	InitLayout();	//初始化布局 
+	setStyleSheet(
+		"QWidget{font-size:12pt;}"
+		"QGroupBox{font-size:16pt; background-color:papayawhip; padding:10px;margin:20px;}"
+		"QSpinBox{min-height:30px;}"
+		"QComboBox{min-height:30px;}"
+		"QDoubleSpinBox{min-height:30px;}"
+	);
 }
 
 
@@ -33,7 +40,7 @@ PrinterConfigWidget::~PrinterConfigWidget(){
 
 void PrinterConfigWidget::InitWidgets() {
 	//初始化布局
-	printer_config_main_layout_ = new QVBoxLayout();
+	printer_config_main_layout_ = new QGridLayout();
 	printer_config_main_layout_->setSpacing(30);
 	bed_size_config_layout_ = new QGridLayout();
 	bed_size_config_layout_->setSpacing(20);
@@ -162,19 +169,20 @@ void PrinterConfigWidget::InitLayout() {
 	size_config_groupbox_->setLayout(bed_size_config_layout_);
 
 	firmware_config_layout_->addWidget(gcode_flavor_label_, 0, 0);
-	firmware_config_layout_->addWidget(gcode_flavor_combobox_, 1,0,1,2);
-	firmware_config_layout_->addWidget(nozzle_diameter_label_, 2, 0);
-	firmware_config_layout_->addWidget(nozzle_diameter_spinbox_, 2, 1);
-	firmware_config_layout_->addWidget(retract_length_label_, 3, 0);
-	firmware_config_layout_->addWidget(retract_length_spinbox_, 3, 1);
-	firmware_config_layout_->addWidget(lift_z_label_, 4, 0);
-	firmware_config_layout_->addWidget(lift_z_spinbox_, 4, 1);
-	firmware_config_layout_->addWidget(wipe_retracting_label_, 5, 0);
-	firmware_config_layout_->addWidget(wipe_retracting_combobox_, 5, 1);
+	firmware_config_layout_->addWidget(gcode_flavor_combobox_, 0,1);
+	firmware_config_layout_->addWidget(nozzle_diameter_label_, 1, 0);
+	firmware_config_layout_->addWidget(nozzle_diameter_spinbox_, 1, 1);
+	firmware_config_layout_->addWidget(retract_length_label_, 2, 0);
+	firmware_config_layout_->addWidget(retract_length_spinbox_, 2, 1);
+	firmware_config_layout_->addWidget(lift_z_label_, 3, 0);
+	firmware_config_layout_->addWidget(lift_z_spinbox_, 3, 1);
+	firmware_config_layout_->addWidget(wipe_retracting_label_, 4, 0);
+	firmware_config_layout_->addWidget(wipe_retracting_combobox_, 4, 1);
 	firmware_config_groupbox_->setLayout(firmware_config_layout_);
 
-	printer_config_main_layout_->addWidget(size_config_groupbox_);
-	printer_config_main_layout_->addWidget(firmware_config_groupbox_);
-	printer_config_main_layout_->addStretch(1);
+	printer_config_main_layout_->addWidget(size_config_groupbox_,0,0);
+	printer_config_main_layout_->addWidget(firmware_config_groupbox_,0,1);
+	printer_config_main_layout_->setRowStretch(0, 1);
+	printer_config_main_layout_->setRowStretch(1, 2);
 	setLayout(printer_config_main_layout_);
 }

@@ -12,8 +12,7 @@ class QGridLayout;
 class QVBoxLayout;
 
 
-class PrintConfigWidget :
-	public QWidget
+class PrintConfigWidget :public QWidget
 {
 	Q_OBJECT
 
@@ -22,12 +21,15 @@ public:
 	~PrintConfigWidget();
 	void InitWidgets();	//初始化控件
 	void InitLayout();	//初始化布局
+	void InitConnections();
 
+private slots:
+	void ValidateSupport(int valid);
 
 	//窗口控件
 private:
 	
-	QVBoxLayout* print_config_main_layout_;	//全局布局
+	QGridLayout* print_config_main_layout_;	//全局布局
 	QGridLayout* general_config_layout_;	//基本参数设置布局
 	QGridLayout* infill_config_layout_;		//填充参数设置布局
 	QGridLayout* support_config_layout_;	//支撑参数设置布局
@@ -39,6 +41,9 @@ private:
 	
 	QLabel* layer_height_label_;	//层高
 	QDoubleSpinBox* layer_height_spinbox_;
+
+	QLabel* first_layer_height_label_;	//第一层层高
+	QDoubleSpinBox* first_layer_height_spinbox_;
 
 	
 	QLabel* perimeters_label_;		//外壳层数
@@ -62,8 +67,11 @@ private:
 	QComboBox* fill_pattern_combobox_;
 
 	
-	QLabel* top_fill_pattern_label_;	//顶层和底层填充模式
+	QLabel* top_fill_pattern_label_;	//顶层填充模式
 	QComboBox* top_fill_pattern_combobox_;
+
+	QLabel* bottom_fill_pattern_label_;		//低层填充模式
+	QComboBox* bottom_fill_pattern_combobox_;
 
 	//支撑参数设置
 	QGroupBox* support_groupbox_;
@@ -80,9 +88,12 @@ private:
 	QLabel* contact_Zdistance_label_;		//支撑材料和模型之间的间隔
 	QComboBox* contact_Zdistance_combobox_;
 
+	QLabel* support_pattern_label_;		//支撑结构生成模式
+	QComboBox* support_pattern_combobox_;
+
 	
-	QLabel* gen_bridge_label_;		//不生成Bridge结构
-	QComboBox* gen_bridge_combobox_;
+	QLabel* support_bridge_label_;		//支撑Bridge结构
+	QComboBox* support_bridge_combobox_;
 
 	
 	QLabel* raft_layers_label_;		//模型底板高度
@@ -99,7 +110,12 @@ private:
 	QLabel* infill_speed_label_;	//填充区域移动速度	
 	QSpinBox* infill_speed_spinbox_;
 
-	
+	QLabel* bridge_speed_label_;	//悬空区域打印速度
+	QSpinBox* bridge_speed_spinbox_;
+
+	QLabel* support_speed_label_;	//支撑结构打印速度
+	QSpinBox* support_speed_spinbox_;
+
 	QLabel* travel_speed_label_;	//打印间隔的移动速度
 	QSpinBox* travel_speed_spinbox_;
 };

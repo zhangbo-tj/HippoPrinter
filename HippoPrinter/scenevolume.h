@@ -11,6 +11,7 @@ public:
 
 	const BoundingBoxf3& BBox()const;
 	BoundingBoxf3& BBox();
+	BoundingBoxf3 TransformedBBox();
 	void SetBBox(const BoundingBoxf3& bbox);
 
 
@@ -35,13 +36,13 @@ public:
 	Pointf3 origin_;
 	bool selected_;
 	bool hover_;
+	int select_group_id_;
+	int drag_group_id_;
 	float color[4];
 	GLVertexArray tverts_;
 	GLVertexArray qverts_;
 
 
-// 	std::map<double, int> qverts_offset;
-// 	std::map<double, int> tverts_offset;
 	std::map<double, std::pair<int, int> > offsets;
 };
 
