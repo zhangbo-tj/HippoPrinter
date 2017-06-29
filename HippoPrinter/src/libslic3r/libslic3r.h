@@ -98,7 +98,7 @@ template <class T> void
 parallelize(std::queue<T> queue, boost::function<void(T)> func,
 	int threads_count = boost::thread::hardware_concurrency())
 {
-	qDebug() <<"The size of parallel queue is :"<< queue.size();
+	//qDebug() <<"The size of parallel queue is :"<< queue.size();
 	if (threads_count == 0) threads_count = 2;
 	boost::mutex queue_mutex;
 	boost::thread_group workers;

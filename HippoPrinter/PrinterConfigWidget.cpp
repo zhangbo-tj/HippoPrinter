@@ -40,7 +40,7 @@ PrinterConfigWidget::~PrinterConfigWidget(){
 
 void PrinterConfigWidget::InitWidgets() {
 	//初始化布局
-	printer_config_main_layout_ = new QGridLayout();
+	printer_config_main_layout_ = new QVBoxLayout();
 	printer_config_main_layout_->setSpacing(30);
 	bed_size_config_layout_ = new QGridLayout();
 	bed_size_config_layout_->setSpacing(20);
@@ -180,9 +180,10 @@ void PrinterConfigWidget::InitLayout() {
 	firmware_config_layout_->addWidget(wipe_retracting_combobox_, 4, 1);
 	firmware_config_groupbox_->setLayout(firmware_config_layout_);
 
-	printer_config_main_layout_->addWidget(size_config_groupbox_,0,0);
-	printer_config_main_layout_->addWidget(firmware_config_groupbox_,0,1);
-	printer_config_main_layout_->setRowStretch(0, 1);
-	printer_config_main_layout_->setRowStretch(1, 2);
+	printer_config_main_layout_->addWidget(size_config_groupbox_);
+	printer_config_main_layout_->addWidget(firmware_config_groupbox_);
+// 	printer_config_main_layout_->setRowStretch(0, 1);
+// 	printer_config_main_layout_->setRowStretch(1, 2);
+	printer_config_main_layout_->addStretch(1);
 	setLayout(printer_config_main_layout_);
 }

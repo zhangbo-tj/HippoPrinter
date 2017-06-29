@@ -819,6 +819,8 @@ PrintObject::_make_perimeters()
 	if (this->state.is_done(posPerimeters)) return;
 	this->state.set_started(posPerimeters);
 	
+	//main_statusbar_->showMessage("Start make perimeters");
+
 	// merge slices if they were split into types
 	// This is not currently taking place because since merge_slices + detect_surfaces_type
 	// are not truly idempotent we are invalidating posSlice here (see the Perl part of 
@@ -943,6 +945,8 @@ PrintObject::_infill()
 	if (this->state.is_done(posInfill)) return;
 	this->state.set_started(posInfill);
 	
+	//main_statusbar_->showMessage("Start infill");
+
 	parallelize<Layer*>(
 		std::queue<Layer*>(std::deque<Layer*>(this->layers.begin(), this->layers.end())),  // cast LayerPtrs to std::queue<Layer*>
 		boost::bind(&Slic3r::Layer::make_fills, _1),
@@ -975,6 +979,7 @@ void PrintObject::Slice() {
 
 	state.set_started(posSlice);
 
+	//main_statusbar_->showMessage("Start slicing model");
 
 	//对打印对象进行切分
 	_slice();
@@ -1112,6 +1117,8 @@ void PrintObject::PrepareInfill() {
 
 	//设置打印状态
 	state.set_started(posPrepareInfill);
+	//main_statusbar_->showMessage("Start preparing infill");
+
 	//将所有layer region上的surface分类为top/internal/bottom
 	//根据某一曾上方或下方是否存在别的层进行判断
 	DetectSurfaceType();
@@ -1778,4 +1785,12 @@ void PrintObject::GenerateSupportMaterial() {
 		state.set_done(posSupportMaterial);
 		return;
 	}
+}
+
+
+/*
+ *	设置主窗口的状态栏
+ */
+void PrintObject::SetStatusbar(QStatusBar* statusbar) {
+	main_statusbar_ = statusbar;
 }

@@ -48,7 +48,7 @@ FilamentConfigWidget::~FilamentConfigWidget(){
 
 void FilamentConfigWidget::InitWidgets() {
 	//初始化布局
-	filacofig_main_layout_ = new QGridLayout();
+	filacofig_main_layout_ = new QVBoxLayout();
 	filacofig_main_layout_->setSpacing(30);
 	fila_config_layout_ = new QGridLayout();
 	fila_config_layout_->setSpacing(20);
@@ -137,9 +137,14 @@ void FilamentConfigWidget::InitLayout() {
 	temp_config_groupbox_->setLayout(temp_config_layout_);
 
 	//初始化控件全局布局
-	filacofig_main_layout_->addWidget(fila_config_groupbox_,0,0);
-	filacofig_main_layout_->addWidget(temp_config_groupbox_,0,1);
-	filacofig_main_layout_->setRowStretch(0, 1);
-	filacofig_main_layout_->setRowStretch(1, 2);
+// 	filacofig_main_layout_->addWidget(fila_config_groupbox_,0,0);
+// 	filacofig_main_layout_->addWidget(temp_config_groupbox_,0,1);
+// 	filacofig_main_layout_->setRowStretch(0, 1);
+// 	filacofig_main_layout_->setRowStretch(1, 2);
+	filacofig_main_layout_->addWidget(fila_config_groupbox_);
+	filacofig_main_layout_->addWidget(temp_config_groupbox_);
+	filacofig_main_layout_->addStretch(1);
+
+
 	setLayout(filacofig_main_layout_);
 }

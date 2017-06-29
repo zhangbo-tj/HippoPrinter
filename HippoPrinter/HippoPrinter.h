@@ -18,6 +18,7 @@ class QToolBar;
 class QSlider;
 class QListWidget;
 class QStackedWidget;
+class QScrollArea;
 
 #include <src/libslic3r/Print.hpp>
 #include <src/libslic3r/BoundingBox.hpp>
@@ -30,7 +31,7 @@ class QStackedWidget;
 #include "ToolpathPreviewWidget.h"
 #include "ToolpathPlaneWidget.h"
 
-
+class QStatusBar;
 class HippoPrinter : public QMainWindow
 {
 	Q_OBJECT
@@ -50,6 +51,8 @@ private:
 	void InitConnections();
 	void SetupWindowStyle();
 
+	void InitDynamicConfig();
+
 private slots:
 	void OpenFile();
 	void SwitchTab();
@@ -59,7 +62,8 @@ private:
 	QMenu* file_menu_;	//文件菜单
 	QMenu* setting_menu_;	//设置菜单
 	QMenu* help_menu_;	//帮助菜单
-	QToolBar* action_toolbar_;
+	QToolBar* action_toolbar_;	//工具栏
+	QStatusBar* statusbar_;		//状态栏
 
 private:
 	/*文件菜单下的操作*/
@@ -79,11 +83,15 @@ private:
 	QAction* about_qt_action_;	//获取相关资料
 
 
-	QAction* gen_toolpath_action_;
+	QAction* gen_toolpath_action_;		//生成打印路径
 
 
 private:
 
+	QHBoxLayout* central_layout_;
+	QWidget* central_widget_;
+
+	//中心TabWidget,用于显示所有的内容
 	QTabWidget* central_tabwidget_;
 
 	//显示三维模型
@@ -103,15 +111,10 @@ private:
 
 
 	//设置耗材参数、打印参数、打印机参数
-	QWidget* setting_main_widget_;
-	QHBoxLayout* setting_hlayout_;
-	QListWidget* setting_listwidget_;
-	QStackedWidget* setting_stackedwidget_;
-	FilamentConfigWidget* fila_config_widget_;
 	PrintConfigWidget* print_config_widget_;
-	PrinterConfigWidget* printer_config_widget_;
+	QScrollArea* config_scrollarea_;
 
-
+		
 private slots:
 	void StartProcess();
 
@@ -134,10 +137,13 @@ private:
 	//生成打印路径过程
 	void OnProcessCompleted();
 
+	void PrintProcess();
+
 
 private:
 	Model* model_;		//Model对象
 	Print* print_;		//Print对象
+	DynamicPrintConfig dynamic_config_;
 
 	BoundingBoxf bed_shape_;
 

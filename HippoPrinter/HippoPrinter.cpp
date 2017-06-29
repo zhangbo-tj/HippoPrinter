@@ -1,6 +1,8 @@
 #include "HippoPrinter.h"
 #include <iostream>
 
+#include <thread>
+
 #include<QSize>
 #include <QString>
 #include <QDebug>
@@ -20,6 +22,7 @@
 #include <QIcon>
 #include <QToolBar>
 #include <QSlider>
+#include <QScrollArea>
 
 HippoPrinter::HippoPrinter(QWidget *parent)
 	: QMainWindow(parent),
@@ -46,13 +49,19 @@ HippoPrinter::HippoPrinter(QWidget *parent)
 	InitConnections();
 
 	setContentsMargins(5, 5, 10, 5);
-	statusBar()->showMessage(tr("Ready"));
+	statusbar_ = statusBar();
+	statusbar_->showMessage("Ready");
+	print_->SetStatusBar(statusbar_);
+	
+	//statusBar()->showMessage(tr("Ready"));
 
 	if (!isMaximized()) {
 		showMaximized();
 	}
 
 	LoadFile("3Dowllovely_face.stl");
+
+	InitDynamicConfig();
 }
 
 
@@ -187,54 +196,19 @@ void HippoPrinter::InitWidgets() {
 	toolpath_2d_layout_->addWidget(toolpath_plane_widget_);
 	toolpath_2d_layout_->addWidget(toolpath_2d_slider_);
 
-	//设置参数Tab页
-	setting_main_widget_ = new QWidget();
 
-	//设置左侧ListWidget
-	setting_listwidget_ = new QListWidget();
-
-	//分别添加三个ListItem,用于索引不同的参数设置页面
-	QListWidgetItem* print_setting_listitem = new QListWidgetItem(setting_listwidget_);
-	print_setting_listitem->setText(QString::fromLocal8Bit("Print Setting"));
-	print_setting_listitem->setTextAlignment(Qt::AlignCenter);
-	print_setting_listitem->setSizeHint(QSize(100, 50));
-
-	QListWidgetItem* printer_setting_listitem = new QListWidgetItem(setting_listwidget_);
-	printer_setting_listitem->setText(QString::fromLocal8Bit("Printer Setting"));
-	printer_setting_listitem->setTextAlignment(Qt::AlignCenter);
-	printer_setting_listitem->setSizeHint(QSize(100, 50));
-
-	QListWidgetItem* fila_setting_listitem = new QListWidgetItem(setting_listwidget_);
-	fila_setting_listitem->setText(QString::fromLocal8Bit("Filament Setting"));
-	fila_setting_listitem->setTextAlignment(Qt::AlignCenter);
-	fila_setting_listitem->setSizeHint(QSize(100, 50));
-
-	setting_listwidget_->setViewMode(QListView::ListMode);
-	setting_listwidget_->setStyleSheet(
-		"QListWidget{border:1px solid gray; color:black; border-radius:5px;font:16px Times;}"
-		"QListWidget::Item{border:1px solid gray; color:black; text-align:center;}"
-		
-		"QListWidget::Item::hover{background:lightgray;}"
-		"QListWidget::Item::selected{background:skyblue;}"
-	);
-	setting_listwidget_->setCurrentRow(0);
-
-	//添加StackedWidget，用于显示和设置不同类型的参数
-	setting_stackedwidget_ = new QStackedWidget();
-	fila_config_widget_ = new FilamentConfigWidget();
-	print_config_widget_ = new PrintConfigWidget();
-	printer_config_widget_ = new PrinterConfigWidget();
-	setting_stackedwidget_->addWidget(print_config_widget_);
-	setting_stackedwidget_->addWidget(printer_config_widget_);
-	setting_stackedwidget_->addWidget(fila_config_widget_);
-
+	print_config_widget_ = new PrintConfigWidget(&dynamic_config_);
+	config_scrollarea_ = new QScrollArea;
+	config_scrollarea_->setWidget(print_config_widget_);
+	config_scrollarea_->setWidgetResizable(true);
+	config_scrollarea_->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
 
 	//中心显示控件，并分别添加三维模型Tab页、三维打印路径Tab页、二维打印路径Tab页、设置参数Tab页
 	central_tabwidget_ = new QTabWidget();
 	central_tabwidget_->addTab(model_widget_, QString::fromLocal8Bit("3D Model"));
 	central_tabwidget_->addTab(toolpath_3d_widget_, QString::fromLocal8Bit("3D Preview"));
 	central_tabwidget_->addTab(toolpath_2d_widget_, QString::fromLocal8Bit("2D Preview"));
-	central_tabwidget_->addTab(setting_main_widget_, QString::fromLocal8Bit("Setting"));
+	//central_tabwidget_->addTab(setting_main_widget_, QString::fromLocal8Bit("Setting"));
 
 
 	central_tabwidget_->setTabPosition(QTabWidget::North);
@@ -248,6 +222,9 @@ void HippoPrinter::InitWidgets() {
 		"QTabBar::tab:selected{background:skyblue;color:white;border-color:skyblue}"
 		"QTabBar::tab:!selected{margin-top:2px}"
 	);
+
+
+	central_widget_ = new QWidget(this);
 }
 
 
@@ -255,16 +232,14 @@ void HippoPrinter::InitWidgets() {
  *	设置页面布局，可能还需要添加控制打印参数的控件
  */
 void HippoPrinter::InitLayout() {
-	setting_hlayout_ = new QHBoxLayout();
-	setting_hlayout_->addWidget(setting_listwidget_);
-	setting_hlayout_->addWidget(setting_stackedwidget_);
-	setting_hlayout_->setStretchFactor(setting_listwidget_, 1);
-	setting_hlayout_->setStretchFactor(setting_stackedwidget_, 5);
-	
-	setting_main_widget_->setLayout(setting_hlayout_);
+	central_layout_ = new QHBoxLayout();
+	central_layout_->addWidget(central_tabwidget_,8);
+	central_layout_->addWidget(config_scrollarea_,2);
+	central_widget_->setLayout(central_layout_);
 
+	setCentralWidget(central_widget_);
 
-	setCentralWidget(central_tabwidget_);
+	//setCentralWidget(central_tabwidget_);
 }
 
 
@@ -287,7 +262,7 @@ void HippoPrinter::InitConnections() {
 	//2D Slider
 	connect(toolpath_2d_slider_, &QSlider::valueChanged, toolpath_plane_widget_, &ToolpathPlaneWidget::SetLayerZ);
 
-	connect(setting_listwidget_, &QListWidget::currentRowChanged, setting_stackedwidget_, &QStackedWidget::setCurrentIndex);
+	//connect(setting_listwidget_, &QListWidget::currentRowChanged, setting_stackedwidget_, &QStackedWidget::setCurrentIndex);
 }
 
 
@@ -413,6 +388,25 @@ void HippoPrinter::ArrangeObjects()
 	bool success = model_->arrange_objects(print_->config.min_object_distance(), &bed_shape_);
 }
 
+void HippoPrinter::PrintProcess() {
+	print_->Process();
+}
+
+/*
+*	开始进行处理
+*/
+void HippoPrinter::StartProcess() {
+	if (model_->objects.empty()) {
+		OnProcessCompleted();
+		return;
+	}
+
+	std::thread t(&HippoPrinter::PrintProcess,this);
+	t.join();
+	//print_->Process();
+	OnProcessCompleted();
+}
+
 
 /*
  *	当打印模型出现变化时要采取的操作
@@ -427,6 +421,9 @@ void HippoPrinter::OnModelChanged() {
 	print_->reload_model_instances();
 
 	processed_ = false;
+	//StartProcess();
+// 	std::thread t(&HippoPrinter::StartProcess,this);
+// 	t.join();
 }
 
 
@@ -451,15 +448,6 @@ void HippoPrinter::RefreshWidgets() {
 }
 
 
-void HippoPrinter::StartProcess() {
-	if (model_->objects.empty()) {
-		OnProcessCompleted();
-		return;
-	}
-
-	print_->Process();
-	OnProcessCompleted();
-}
 
 /*
  *	打印路径生成完成
@@ -476,4 +464,13 @@ void HippoPrinter::OnProcessCompleted() {
 	toolpath_2d_slider_->setValue(toolpath_2d_slider_->maximum());
 	toolpath_plane_widget_->update();
 
+}
+
+
+
+void HippoPrinter::InitDynamicConfig() {
+	/*ConfigOption* config = dynamic_config_.optptr("layer_height", true);
+	config->set(*(dynamic_config_.def->get("layer_height")->default_value));
+
+	qDebug() << "layer_height:"<<dynamic_config_.option("layer_height")->getFloat();*/
 }

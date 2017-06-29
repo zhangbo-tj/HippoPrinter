@@ -1,5 +1,6 @@
 #pragma once
-#include "qwidget.h"
+#include <QWidget>
+#include <src/libslic3r/Print.hpp>
 
 class QLabel;
 class QGroupBox;
@@ -8,115 +9,80 @@ class QSpinBox;
 class QLineEdit;
 class QComboBox;
 class QCheckBox;
-class QGridLayout;
 class QVBoxLayout;
 
 
+/*
+ *	设置参数的自定义控件，包括基本参数、耗材参数、固件参数等
+ */
 class PrintConfigWidget :public QWidget
 {
 	Q_OBJECT
 
 public:
-	PrintConfigWidget(QWidget* parent = 0);
+	PrintConfigWidget(DynamicPrintConfig* config, QWidget* parent = 0);
 	~PrintConfigWidget();
-	void InitWidgets();	//初始化控件
-	void InitLayout();	//初始化布局
-	void InitConnections();
+	
+	void InitMainLayout();
+	void InitGeneralSettting();
+	void InitInfillSetting();
+	void InitSupportSetting();
+	void InitSpeedSetting();
+	void InitFilaSetting();
+	void InitTempSettting();
+	void InitSizeSetting();
+	void InitFirmwareSetting();
+
+	
 
 private slots:
 	void ValidateSupport(int valid);
+	void ChangeBedShape();
+
 
 	//窗口控件
 private:
-	
-	QGridLayout* print_config_main_layout_;	//全局布局
-	QGridLayout* general_config_layout_;	//基本参数设置布局
-	QGridLayout* infill_config_layout_;		//填充参数设置布局
-	QGridLayout* support_config_layout_;	//支撑参数设置布局
-	QGridLayout* speed_config_layout_;		//速度参数设置布局
+	DynamicPrintConfig* config_;
 
-	//*基本参数设置
+	int scale0_;
+	int scale1_;
+	int hspacing_;
+	int vertical_spacing_;
+	int horizon_spacing_;
+	
+	///基本参数
 	QGroupBox* general_groupbox_;
 
-	
-	QLabel* layer_height_label_;	//层高
-	QDoubleSpinBox* layer_height_spinbox_;
-
-	QLabel* first_layer_height_label_;	//第一层层高
-	QDoubleSpinBox* first_layer_height_spinbox_;
-
-	
-	QLabel* perimeters_label_;		//外壳层数
-	QSpinBox* perimeter_spinbox_;
-
-	
-	QLabel* solid_layer_label_;		// 实心层数目
-	QSpinBox* top_solid_spinbox_;	//顶层实心层数目
-	QSpinBox* bottom_solid_spinbox_;	//底层实心曾数目
-
-
-	
+	///填充相关参数
 	QGroupBox* infill_groupbox_;	//*填充参数设置
 
-	
-	QLabel* fill_desnity_label_;		//填充密度
-	QSpinBox* fill_desnity_spinbox_;
-
-	
-	QLabel* fill_pattern_label_;	//填充模式
-	QComboBox* fill_pattern_combobox_;
-
-	
-	QLabel* top_fill_pattern_label_;	//顶层填充模式
-	QComboBox* top_fill_pattern_combobox_;
-
-	QLabel* bottom_fill_pattern_label_;		//低层填充模式
-	QComboBox* bottom_fill_pattern_combobox_;
-
-	//支撑参数设置
+	///支撑结构相关参数
 	QGroupBox* support_groupbox_;
+	QComboBox* gen_support_combobox_;	//是否生成支撑
+	QDoubleSpinBox* pattern_spacing_spinbox_;	//支撑材料之间的间隔
+	QComboBox* contact_Zdistance_combobox_;	//支撑材料和模型之间的间隔
+	QComboBox* support_pattern_combobox_;	//支撑结构生成模式
+	QComboBox* support_bridge_combobox_;	//是否支撑Bridge结构
+	QSpinBox* raft_layers_spinbox_;		//raft层数
 
-	
-	QLabel* gen_support_label_;		//是否生成支撑
-	QComboBox* gen_support_combobox_;
-
-	
-	QLabel* pattern_spacing_label_;		//支撑材料之间的间隔
-	QDoubleSpinBox* pattern_spacing_spinbox_;
-
-	
-	QLabel* contact_Zdistance_label_;		//支撑材料和模型之间的间隔
-	QComboBox* contact_Zdistance_combobox_;
-
-	QLabel* support_pattern_label_;		//支撑结构生成模式
-	QComboBox* support_pattern_combobox_;
-
-	
-	QLabel* support_bridge_label_;		//支撑Bridge结构
-	QComboBox* support_bridge_combobox_;
-
-	
-	QLabel* raft_layers_label_;		//模型底板高度
-	QSpinBox* raft_layers_spinbox_;
-
-	//速度参数设置
+	///打印速度相关参数
 	QGroupBox* speed_groupbox_;
 
-	
-	QLabel* peri_speed_label_;		//边缘区域移动速度
-	QSpinBox* peri_speed_spinbox_;
 
-	
-	QLabel* infill_speed_label_;	//填充区域移动速度	
-	QSpinBox* infill_speed_spinbox_;
+	///打印耗材相关参数
+	QGroupBox* fila_config_groupbox_;	
 
-	QLabel* bridge_speed_label_;	//悬空区域打印速度
-	QSpinBox* bridge_speed_spinbox_;
+	///打印温度相关参数
+	QGroupBox* temp_config_groupbox_;		//温度设置
 
-	QLabel* support_speed_label_;	//支撑结构打印速度
-	QSpinBox* support_speed_spinbox_;
+	///打印机尺寸相关参数
+	QGroupBox* size_config_groupbox_;
+	QSpinBox* size_x_spinbox_;	//热床尺寸-x
+	QSpinBox* size_y_spinbox_;	//热床尺寸-y
+	QSpinBox* origin_x_spinbox_;	//热床原点位置-x
+	QSpinBox* origin_y_spinbox_;	//热床原点位置-y
 
-	QLabel* travel_speed_label_;	//打印间隔的移动速度
-	QSpinBox* travel_speed_spinbox_;
+	///固件相关参数
+	QGroupBox* firmware_config_groupbox_;
 };
 

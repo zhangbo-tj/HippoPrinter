@@ -121,6 +121,7 @@ Print::reload_model_instances()
 	bool invalidated = false;
 	FOREACH_OBJECT(this, object) {
 		if ((*object)->reload_model_instances()) invalidated = true;
+		(*object)->SetStatusbar(main_statusbar_);
 	}
 	return invalidated;
 }
@@ -1075,10 +1076,11 @@ void Print::Process() {
 	// 生成填充结构
 	for (PrintObject* object : objects) {
 		object->Infill();
-		qDebug() << " An object completed";
+		//qDebug() << " An object completed";
 	}
 
-	qDebug() << "Process completed";
+	//qDebug() << "Process completed";
+	//main_statusbar_->showMessage("Finished infilling toolpath");
 
 }
 
@@ -1089,4 +1091,12 @@ void Print::MakeSkirt() {
 
 void Print::MakeBrim() {
 
+}
+
+
+void Print::SetStatusBar(QStatusBar* statusbar) {
+	main_statusbar_ = statusbar;
+	for (PrintObject* object : objects) {
+		object->SetStatusbar(statusbar);
+	}
 }

@@ -5,7 +5,9 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <QStatusBar>
 #include <boost/thread.hpp>
+
 #include "BoundingBox.hpp"
 #include "Flow.hpp"
 #include "PrintConfig.hpp"
@@ -161,7 +163,7 @@ class PrintObject
 	PrintObject(Print* print, ModelObject* model_object, const BoundingBoxf3 &modobj_bbox);
 	~PrintObject();
 
-
+public:
 	/*
 	 *	用户自己添加的函数，在原项目代码中是以Perl代码形式存在的
 	 */
@@ -176,6 +178,9 @@ class PrintObject
 	void DetectSurfaceType();
 	void GenerateSupportMaterial();
 	
+	QStatusBar* main_statusbar_;
+	void SetStatusbar(QStatusBar* statusbar);
+
 };
 
 typedef std::vector<PrintObject*> PrintObjectPtrs;
@@ -258,6 +263,8 @@ public:
 	void Process();
 	void MakeSkirt();
 	void MakeBrim();
+	QStatusBar* main_statusbar_;
+	void SetStatusBar(QStatusBar* statusbar);
 
 };
 

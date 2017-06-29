@@ -5,8 +5,8 @@ class QGroupBox;
 class QLabel;
 class QSpinBox;
 class QDoubleSpinBox;
-class QGridLayout;
 class QVBoxLayout;
+class QGridLayout;
 
 
 class FilamentConfigWidget :
@@ -23,7 +23,7 @@ public:
 
 private:
 	
-	QGridLayout* filacofig_main_layout_;		//控件整体布局
+	QVBoxLayout* filacofig_main_layout_;		//控件整体布局
 	QGridLayout* fila_config_layout_;	//耗材参数设置布局
 	QGridLayout* temp_config_layout_;	//温度设置布局
 
