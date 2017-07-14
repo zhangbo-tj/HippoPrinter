@@ -1,4 +1,5 @@
 ﻿#include "Print.hpp"
+#include "SupportMaterial.hpp"
 #include "BoundingBox.hpp"
 #include "ClipperUtils.hpp"
 #include "Geometry.hpp"
@@ -819,7 +820,7 @@ PrintObject::_make_perimeters()
 	if (this->state.is_done(posPerimeters)) return;
 	this->state.set_started(posPerimeters);
 	
-	//main_statusbar_->showMessage("Start make perimeters");
+	main_statusbar_->showMessage("Start make perimeters");
 
 	// merge slices if they were split into types
 	// This is not currently taking place because since merge_slices + detect_surfaces_type
@@ -945,7 +946,7 @@ PrintObject::_infill()
 	if (this->state.is_done(posInfill)) return;
 	this->state.set_started(posInfill);
 	
-	//main_statusbar_->showMessage("Start infill");
+	main_statusbar_->showMessage("Start infill");
 
 	parallelize<Layer*>(
 		std::queue<Layer*>(std::deque<Layer*>(this->layers.begin(), this->layers.end())),  // cast LayerPtrs to std::queue<Layer*>
@@ -979,7 +980,7 @@ void PrintObject::Slice() {
 
 	state.set_started(posSlice);
 
-	//main_statusbar_->showMessage("Start slicing model");
+	main_statusbar_->showMessage("Start slicing model");
 
 	//对打印对象进行切分
 	_slice();
@@ -1117,7 +1118,7 @@ void PrintObject::PrepareInfill() {
 
 	//设置打印状态
 	state.set_started(posPrepareInfill);
-	//main_statusbar_->showMessage("Start preparing infill");
+	main_statusbar_->showMessage("Start preparing infill");
 
 	//将所有layer region上的surface分类为top/internal/bottom
 	//根据某一曾上方或下方是否存在别的层进行判断
@@ -1190,9 +1191,7 @@ void PrintObject::DiscoverHorizontalShells() {
 // 				}
 				for (Surface* surface : solid_slices) {
 					solid_polygons.push_back(surface->expolygon.contour);
-					for (auto& hole : surface->expolygon.holes) {
-						solid_polygons.push_back(hole);
-					}
+					solid_polygons.insert(solid_polygons.end(), surface->expolygon.holes.begin(), surface->expolygon.holes.end());
 				}
 
 
@@ -1204,9 +1203,7 @@ void PrintObject::DiscoverHorizontalShells() {
 // 				}
 				for (Surface* surface : solid_fill_surfaces) {
 					solid_polygons.push_back(surface->expolygon.contour);
-					for (auto& hole : surface->expolygon.holes) {
-						solid_polygons.push_back(hole);
-					}
+					solid_polygons.insert(solid_polygons.end(), surface->expolygon.holes.begin(), surface->expolygon.holes.end());
 				}
 				
 				//如果当前层没有solid区域的话，则跳到下一个类型
@@ -1238,9 +1235,8 @@ void PrintObject::DiscoverHorizontalShells() {
 // 							neighbor_polygons.insert(neighbor_polygons.end(),
 // 								surface.operator Slic3r::Polygons().begin(), surface.operator Slic3r::Polygons().end());
 							neighbor_polygons.push_back(surface.expolygon.contour);
-							for (auto& hole : surface.expolygon.holes) {
-								neighbor_polygons.push_back(hole);
-							}
+							neighbor_polygons.insert(neighbor_polygons.end(),
+								surface.expolygon.holes.begin(), surface.expolygon.holes.end());
 						}
 					}
 
@@ -1303,9 +1299,9 @@ void PrintObject::DiscoverHorizontalShells() {
 // 									internal_bridge_polygons.insert(internal_bridge_polygons.end(),
 // 										surface.operator Slic3r::Polygons().begin(), surface.operator Slic3r::Polygons().end());
 									internal_bridge_polygons.push_back(surface.expolygon.contour);
-									for (auto& hole : surface.expolygon.holes) {
-										internal_bridge_polygons.push_back(hole);
-									}
+									internal_bridge_polygons.insert(internal_bridge_polygons.end(),
+										surface.expolygon.holes.begin(), surface.expolygon.holes.end());
+
 								}
 							}
 
@@ -1327,9 +1323,8 @@ void PrintObject::DiscoverHorizontalShells() {
 // 							neighbor_internal_solid.insert(neighbor_internal_solid.end(),
 // 								surface.operator Slic3r::Polygons().begin(), surface.operator Slic3r::Polygons().end());
 							neighbor_internal_solid.push_back(surface.expolygon.contour);
-							for (auto& hole : surface.expolygon.holes) {
-								neighbor_internal_solid.push_back(hole);
-							}
+							neighbor_internal_solid.insert(neighbor_internal_solid.end(),
+								surface.expolygon.holes.begin(), surface.expolygon.holes.end());
 						}
 					}
 					neighbor_internal_solid.insert(neighbor_internal_solid.end(), 
@@ -1367,7 +1362,6 @@ void PrintObject::DiscoverHorizontalShells() {
 					for (SurfacesConstPtr surfaces : grouped_surfaces) {
 						ExPolygons all_surface_expolygons;
 						for (auto& surface : surfaces) {all_surface_expolygons.push_back(surface->expolygon);}
-
 // 						ExPolygons internal_intersolid_expolygons;
 // 						std::merge(internal.begin(), internal.end(),
 // 							internal_solid.begin(), internal_solid.end(),
@@ -1444,9 +1438,7 @@ void PrintObject::ClipFillSurfaces() {
 			Polygons cur_slices;
 			for (ExPolygon& ex:cur_layer->slices.expolygons) {
 				cur_slices.push_back(ex.contour);
-				for (auto& hole : ex.holes) {
-					cur_slices.push_back(hole);
-				}
+				cur_slices.insert(cur_slices.end(), ex.holes.begin(), ex.holes.end());
 			}
 
 			Polygons cur_fill;
@@ -1474,9 +1466,7 @@ void PrintObject::ClipFillSurfaces() {
 			for (LayerRegion* region : lower_layer->regions) {
 				for (Surface& surface : region->fill_surfaces.surfaces) {
 					lower_infill.push_back(surface.expolygon.contour);
-					for (auto& hole : surface.expolygon.holes) {
-						lower_infill.push_back(hole);
-					}
+					lower_infill.insert(lower_infill.end(), surface.expolygon.holes.begin(), surface.expolygon.holes.end());
 				}
 			}
 
@@ -1519,9 +1509,8 @@ void PrintObject::ClipFillSurfaces() {
 // 						surface.operator Slic3r::Polygons().begin(),
 // 						surface.operator Slic3r::Polygons().end() );
 					lower_internal_internalvoid.push_back(surface.expolygon.contour);
-					for (auto& hole : surface.expolygon.holes) {
-						lower_internal_internalvoid.push_back(hole);
-					}
+					lower_internal_internalvoid.insert(lower_internal_internalvoid.end(),
+						surface.expolygon.holes.begin(), surface.expolygon.holes.end());
 				}
 			}
 		}
@@ -1547,9 +1536,8 @@ void PrintObject::ClipFillSurfaces() {
 // 					lower_internal_polygons.insert(lower_internal_polygons.end(),
 // 						surface.operator Slic3r::Polygons().begin(), surface.operator Slic3r::Polygons().end() );
 					lower_internal_polygons.push_back(surface.expolygon.contour);
-					for (auto& hole : surface.expolygon.holes) {
-						lower_internal_polygons.push_back(hole);
-					}
+					lower_internal_polygons.insert(lower_internal_polygons.end(), 
+						surface.expolygon.holes.begin(), surface.expolygon.holes.end());
 				}
 				else {
 					lower_other_surfaces.push_back(surface);
@@ -1778,13 +1766,39 @@ void PrintObject::GenerateSupportMaterial() {
 	state.set_started(posSupportMaterial);
 
 	clear_support_layers();
-
-	if ((!config.support_material && config.raft_layers == 0) ||
-		(layer_count() < 2)) {
 	
+	if ((!config.support_material && config.raft_layers == 0 && config.support_material_enforce_layers == 0) ||
+		(layer_count() < 2)) {
 		state.set_done(posSupportMaterial);
 		return;
 	}
+
+	float width = _print->config.first_layer_extrusion_width || config.support_material_extrusion_width;
+	double height = config.get_abs_value("first_layer_height");
+	double nozzle_diameter = _print->config.nozzle_diameter.get_at(config.support_material_extruder - 1);
+	Flow first_layer_flow = Flow::new_from_config_width(frSupportMaterial,ConfigOptionFloatOrPercent(width,false),
+		nozzle_diameter, height, 0);
+
+	float support_flow_width = config.support_material_extrusion_width || config.extrusion_width;
+	FlowRole support_role = frSupportMaterial;
+	int support_extruder = config.support_material_extruder;
+	float support_nozzle_diameter = _print->config.nozzle_diameter.get_at(support_extruder);
+	float layer_height = config.layer_height;
+	Flow support_flow = Flow::new_from_config_width(support_role,ConfigOptionFloatOrPercent(support_flow_width,false),
+		support_nozzle_diameter, layer_height, 0);
+
+
+	FlowRole interface_role = frSupportMaterialInterface;
+	int interface_extruder = config.support_material_extruder;
+	float interface_nozzle_diameter = _print->config.nozzle_diameter.get_at(interface_extruder);
+	Flow interface_flow = Flow::new_from_config_width(interface_role, ConfigOptionFloatOrPercent(support_flow_width, false),
+		interface_nozzle_diameter, layer_height, 0);
+
+	SupportMaterial support_material = SupportMaterial(&(_print->config), &config, &first_layer_flow, &support_flow, &interface_flow);
+
+	support_material.Generate(*this);
+
+	state.set_done(posSupportMaterial);
 }
 
 

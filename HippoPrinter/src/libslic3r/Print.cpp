@@ -1079,8 +1079,14 @@ void Print::Process() {
 		//qDebug() << " An object completed";
 	}
 
-	//qDebug() << "Process completed";
+	for (PrintObject* object : objects) {
+		object->GenerateSupportMaterial();
+	}
+
+	qDebug() << "Process completed";
 	//main_statusbar_->showMessage("Finished infilling toolpath");
+
+
 
 }
 

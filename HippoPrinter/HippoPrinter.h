@@ -5,32 +5,28 @@
 #include <QtWidgets/QMainWindow>
 //#include "ui_mainwindow.h"
 
-class QTabWidget;
 
+#include <src/libslic3r/Print.hpp>
+#include <src/libslic3r/BoundingBox.hpp>
+
+#include "ModelWidget.h"
+#include "ToolpathPreviewWidget.h"
+#include "ToolpathPlaneWidget.h"
+#include "PrintConfigWidget.h"
+
+
+class QTabWidget;
 class QMenu;
 class QAction;
 class QWidget;
 class QLabel;
 class QWidget;
-//class QVBoxLayout;
 class QHBoxLayout;
 class QToolBar;
 class QSlider;
 class QListWidget;
 class QStackedWidget;
 class QScrollArea;
-
-#include <src/libslic3r/Print.hpp>
-#include <src/libslic3r/BoundingBox.hpp>
-
-#include "ModelWidget.h"
-#include "FilamentConfigWidget.h"
-#include "PrintConfigWidget.h"
-#include "PrinterConfigWidget.h"
-
-#include "ToolpathPreviewWidget.h"
-#include "ToolpathPlaneWidget.h"
-
 class QStatusBar;
 class HippoPrinter : public QMainWindow
 {
@@ -50,8 +46,6 @@ private:
 	void InitLayout();
 	void InitConnections();
 	void SetupWindowStyle();
-
-	void InitDynamicConfig();
 
 private slots:
 	void OpenFile();

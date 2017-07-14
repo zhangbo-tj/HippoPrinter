@@ -121,7 +121,7 @@ private:
 	std::vector<SceneVolume> volumes_;
 
 	//<color_index,0|1>如果已经存在该color_index,则为1；否则为9
-	std::unordered_map<int, int> color_volumes;
+	std::unordered_map<int, int> color_volumes_;
 
 	//<color__index, volume_index>
 	std::unordered_map<int, int> color_volumeidx;

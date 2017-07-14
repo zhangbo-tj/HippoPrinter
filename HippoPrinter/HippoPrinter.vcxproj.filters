@@ -55,15 +55,6 @@
     <ClCompile Include="GeneratedFiles\qrc_HippoPrinter.cpp">
       <Filter>Generated Files</Filter>
     </ClCompile>
-    <ClCompile Include="FilamentConfigWidget.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="GeneratedFiles\Debug\moc_FilamentConfigWidget.cpp">
-      <Filter>Generated Files\Debug</Filter>
-    </ClCompile>
-    <ClCompile Include="GeneratedFiles\Release\moc_FilamentConfigWidget.cpp">
-      <Filter>Generated Files\Release</Filter>
-    </ClCompile>
     <ClCompile Include="PrintConfigWidget.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -71,15 +62,6 @@
       <Filter>Generated Files\Debug</Filter>
     </ClCompile>
     <ClCompile Include="GeneratedFiles\Release\moc_PrintConfigWidget.cpp">
-      <Filter>Generated Files\Release</Filter>
-    </ClCompile>
-    <ClCompile Include="PrinterConfigWidget.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="GeneratedFiles\Debug\moc_PrinterConfigWidget.cpp">
-      <Filter>Generated Files\Debug</Filter>
-    </ClCompile>
-    <ClCompile Include="GeneratedFiles\Release\moc_PrinterConfigWidget.cpp">
       <Filter>Generated Files\Release</Filter>
     </ClCompile>
     <ClCompile Include="scenevolume.cpp">
@@ -345,13 +327,7 @@
     <CustomBuild Include="HippoPrinter.qrc">
       <Filter>Resource Files</Filter>
     </CustomBuild>
-    <CustomBuild Include="FilamentConfigWidget.h">
-      <Filter>Header Files</Filter>
-    </CustomBuild>
     <CustomBuild Include="PrintConfigWidget.h">
-      <Filter>Header Files</Filter>
-    </CustomBuild>
-    <CustomBuild Include="PrinterConfigWidget.h">
       <Filter>Header Files</Filter>
     </CustomBuild>
     <CustomBuild Include="ModelWidget.h">

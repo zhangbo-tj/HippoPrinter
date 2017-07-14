@@ -23,6 +23,7 @@ public:
 	PrintConfigWidget(DynamicPrintConfig* config, QWidget* parent = 0);
 	~PrintConfigWidget();
 	
+	//初始化控件布局
 	void InitMainLayout();
 	void InitGeneralSettting();
 	void InitInfillSetting();

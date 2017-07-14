@@ -211,6 +211,7 @@ void ToolpathPreviewWidget::ReloadVolumes() {
  */
 void ToolpathPreviewWidget::ResetVolumes() {
 	volumes_.clear();
+	color_volumes_.clear();
 	layer_values_->clear();
 }
 
@@ -265,7 +266,9 @@ void ToolpathPreviewWidget::LoadPrintObjectToolpaths(const PrintObject* object) 
 	
 	//按照print_z对Layers进行排序,可能并不需要
 	std::vector<Layer*> layers(object->layers.begin(), object->layers.end());
-	std::sort(layers.begin(), layers.end(), [](Layer* x, Layer* y) {
+	//layers.insert(layers.end(), object->support_layers.begin(), object->support_layers.end());
+
+	std::sort(layers.begin(), layers.end(), [=](Layer* x, Layer* y) {
 		return x->print_z < y->print_z; 
 	});
 
@@ -339,6 +342,37 @@ void ToolpathPreviewWidget::LoadPrintObjectToolpaths(const PrintObject* object) 
 					}
 				}
 			}
+
+// 			if (typeid(layer) == typeid(SupportLayer) && object->state.is_done(posSupportMaterial)) {
+// 				int color_index = color_toolpaths_by_extruder ?
+// 					(layer->object()->config.support_material_extruder - 1) % 4 : 2;
+// 				SupportLayer* support_layer = dynamic_cast<SupportLayer*>(layer);
+// 				AddScenevolume(support_layer->support_fills, top_z, copy, color_index, bbox);
+// 
+// 				color_index = color_toolpaths_by_extruder ?
+// 					(layer->object()->config.support_material_interface_extruder - 1) % 4 : 3;
+// 				AddScenevolume(support_layer->support_interface_fills, top_z, copy, color_index,bbox);
+// 			}
+		}
+	}
+	std::vector<SupportLayer*> support_layers(object->support_layers.begin(), object->support_layers.end());
+	std::sort(support_layers.begin(), support_layers.end(), [](Layer* x, Layer* y) {
+		return x->print_z < y->print_z;
+	});
+
+	for (SupportLayer* support_layer : support_layers) {
+		coordf_t top_z = support_layer->print_z;
+		for (auto& copy : object->_shifted_copies) {
+			if (object->state.is_done(posSupportMaterial)) {
+				int color_index = color_toolpaths_by_extruder ?
+					(support_layer->object()->config.support_material_extruder - 1) % 4 : 2;
+				AddScenevolume(support_layer->support_fills, top_z, copy, color_index, bbox);
+
+				color_index = color_toolpaths_by_extruder ?
+					(support_layer->object()->config.support_material_interface_extruder - 1) % 4 : 3;
+				AddScenevolume(support_layer->support_interface_fills, top_z, copy, color_index, bbox);
+			}
+			
 		}
 	}
 }
@@ -353,7 +387,7 @@ void ToolpathPreviewWidget::AddScenevolume(ExtrusionEntityCollection& entities, 
 	const Point& copy,int color_index,BoundingBoxf3& bbox) {
 
 	//当前已经存在该color_index对应的对象，则直接添加其qverts和tverts的内容
-	if (color_volumes.find(color_index) != color_volumes.end()) {
+	if (color_volumes_.find(color_index) != color_volumes_.end()) {
 		int volume_index = color_volumeidx[color_index];
 		SceneVolume& volume = volumes_[volume_index];
 
@@ -369,7 +403,7 @@ void ToolpathPreviewWidget::AddScenevolume(ExtrusionEntityCollection& entities, 
 	else {		//如果还没有存在color_index对应的对象，就添加新的SceneVolume对象
 		
 		//添加新的SceneVolume对象，并设置其颜色参数
-		color_volumes[color_index]++;
+		color_volumes_[color_index]++;
 		SceneVolume volume;
 		volume.color[0] = COLORS[color_index][0]; volume.color[1] = COLORS[color_index][1];
 		volume.color[2] = COLORS[color_index][2]; volume.color[3] = COLORS[color_index][3];

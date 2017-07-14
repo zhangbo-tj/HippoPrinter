@@ -23,6 +23,7 @@
 #include <QToolBar>
 #include <QSlider>
 #include <QScrollArea>
+#include <QIcon>
 
 HippoPrinter::HippoPrinter(QWidget *parent)
 	: QMainWindow(parent),
@@ -60,8 +61,6 @@ HippoPrinter::HippoPrinter(QWidget *parent)
 	}
 
 	LoadFile("3Dowllovely_face.stl");
-
-	InitDynamicConfig();
 }
 
 
@@ -125,7 +124,13 @@ void HippoPrinter::InitActions() {
 void HippoPrinter::InitToolBars() {
 	action_toolbar_ = addToolBar(QString::fromLocal8Bit("actions"));
 
+	QIcon gen_toolpath_icon;
+	gen_toolpath_icon.addFile(QString::fromLocal8Bit("Resources/Icons/gen_toolpath.png"), QSize(), QIcon::Normal, QIcon::Off);
+	gen_toolpath_action_->setIcon(gen_toolpath_icon);
+	gen_toolpath_action_->setIconText(QString::fromLocal8Bit("生成路径"));
+	action_toolbar_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 	action_toolbar_->addAction(gen_toolpath_action_);
+	
 }
 
 void HippoPrinter::SetupWindowStyle() {
@@ -396,14 +401,13 @@ void HippoPrinter::PrintProcess() {
 *	开始进行处理
 */
 void HippoPrinter::StartProcess() {
+	print_->apply_config(dynamic_config_);
 	if (model_->objects.empty()) {
 		OnProcessCompleted();
 		return;
 	}
 
-	std::thread t(&HippoPrinter::PrintProcess,this);
-	t.join();
-	//print_->Process();
+	print_->Process();
 	OnProcessCompleted();
 }
 
@@ -466,11 +470,3 @@ void HippoPrinter::OnProcessCompleted() {
 
 }
 
-
-
-void HippoPrinter::InitDynamicConfig() {
-	/*ConfigOption* config = dynamic_config_.optptr("layer_height", true);
-	config->set(*(dynamic_config_.def->get("layer_height")->default_value));
-
-	qDebug() << "layer_height:"<<dynamic_config_.option("layer_height")->getFloat();*/
-}
