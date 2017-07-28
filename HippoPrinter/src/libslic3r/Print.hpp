@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <QStatusBar>
+#include <QProgressBar>
 #include <boost/thread.hpp>
 
 #include "BoundingBox.hpp"
@@ -15,6 +16,7 @@
 #include "Layer.hpp"
 #include "Model.hpp"
 #include "PlaceholderParser.hpp"
+
 
 
 namespace Slic3r {
@@ -178,9 +180,6 @@ public:
 	void DetectSurfaceType();
 	void GenerateSupportMaterial();
 	
-	QStatusBar* main_statusbar_;
-	void SetStatusbar(QStatusBar* statusbar);
-
 };
 
 typedef std::vector<PrintObject*> PrintObjectPtrs;
@@ -263,9 +262,13 @@ public:
 	void Process();
 	void MakeSkirt();
 	void MakeBrim();
-	QStatusBar* main_statusbar_;
-	void SetStatusBar(QStatusBar* statusbar);
-
+	QStatusBar* statusbar_;
+	QProgressBar* progress_bar_;
+	void SetStatusBar(QStatusBar* statusbar, QProgressBar* progressbar);
+	void SetProgressStatus(int percentage, QString& status);
+	void ClearFilamentStats();
+	void SetFilamentStats(int extruder_id, double length);
+	void ExportGCode(char* file_path);
 };
 
 #define FOREACH_BASE(type, container, iterator) for (type::const_iterator iterator = (container).begin(); iterator != (container).end(); ++iterator)

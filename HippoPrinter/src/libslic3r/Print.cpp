@@ -5,6 +5,7 @@
 #include "Flow.hpp"
 #include "Geometry.hpp"
 #include "SupportMaterial.hpp"
+#include "GCodeExporter.h"
 #include <algorithm>
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
@@ -121,7 +122,6 @@ Print::reload_model_instances()
 	bool invalidated = false;
 	FOREACH_OBJECT(this, object) {
 		if ((*object)->reload_model_instances()) invalidated = true;
-		(*object)->SetStatusbar(main_statusbar_);
 	}
 	return invalidated;
 }
@@ -1070,7 +1070,6 @@ Print::output_filepath(const std::string &path)
  *  generate support material, make brim等操作
  */
 void Print::Process() {
-
 	//生成Perimeter
 
 	// 生成填充结构
@@ -1082,27 +1081,95 @@ void Print::Process() {
 	for (PrintObject* object : objects) {
 		object->GenerateSupportMaterial();
 	}
-
-	qDebug() << "Process completed";
-	//main_statusbar_->showMessage("Finished infilling toolpath");
-
-
-
+	SetProgressStatus(100, QString("Generating tool-path completed"));
+	SetProgressStatus(0, QString("Generating tool-path completed"));
 }
 
 
 void Print::MakeSkirt() {
+// 	for (PrintObject* object : objects) {
+// 		object->MakePerimeters();
+// 	}
+// 
+// 	for (PrintObject* object : objects) {
+// 		object->Infill();
+// 	}
+// 	for (PrintObject* object : objects) {
+// 		object->GenerateSupportMaterial();
+// 	}
+// 
+// 	if (state.is_done(psSkirt))return;
+// 	state.set_started(psSkirt);
+// 
+// 	skirt.clear();
+// 	if (!has_skirt()) {
+// 		state.set_done(psSkirt);
+// 		return;
+// 	}
+// 
+// 	double skirt_height_z = -1;
+// 	for (PrintObject* object : objects) {
+// 		int skirt_height = has_infinite_skirt() ? object->layer_count() : std::min(config.skirt_height.value, (int)object->layer_count());
+// 		Layer* heighest_layer = object->get_layer(skirt_height - 1);
+// 		skirt_height_z = std::max(skirt_height_z, heighest_layer->print_z);
+// 	}
+// 	
+// 	Points points;
+// 	for (PrintObject* object : objects) {
+// 		Points object_points;
+// 		for (Layer* layer : object->layers) {
+// 			if (layer->print_z > skirt_height_z)break;
+// 			Points temp_points = layer->slices.operator Points();
+// 			object_points.insert(object_points.end(), temp_points.begin(), temp_points.end());
+// 		}
+// 
+// 		for (SupportLayer* support_layer : object->support_layers) {
+// 			if(support_layer->print_z > skirt_height_z)break;
+// 			if (!support_layer->support_fills.empty()) {
+// 				Points temp_points = support_layer->support_fills.as_polyline().points;
+// 
+// 			}
+// 		}
+// 	}
 
 }
 
 void Print::MakeBrim() {
+	for (PrintObject* object : objects) {
+		object->MakePerimeters();
+	}
 
+	for (PrintObject* object : objects) {
+		object->Infill();
+	}
+	for (PrintObject* object : objects) {
+		object->GenerateSupportMaterial();
+	}
+
+	_make_brim();
 }
 
 
-void Print::SetStatusBar(QStatusBar* statusbar) {
-	main_statusbar_ = statusbar;
-	for (PrintObject* object : objects) {
-		object->SetStatusbar(statusbar);
-	}
+void Print::SetStatusBar(QStatusBar* statusbar,QProgressBar* progressbar) {
+	statusbar_ = statusbar;
+	progress_bar_ = progressbar;
+}
+
+void Print::SetProgressStatus(int percentage, QString& status) {
+	this->progress_bar_->setValue(percentage);
+	this->statusbar_->showMessage(status);
+}
+
+void Print::ClearFilamentStats() {
+	filament_stats.clear();
+}
+
+void Print::SetFilamentStats(int extruder_id, double length) {
+	filament_stats[extruder_id] += length;
+}
+
+void Print::ExportGCode(char* file_path) {
+	Process();
+	GCodeExporter gcode_exporter = GCodeExporter(this);
+	gcode_exporter.Export(file_path);
 }

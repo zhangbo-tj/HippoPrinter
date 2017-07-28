@@ -340,7 +340,16 @@ void ToolpathPlaneWidget::wheelEvent(QWheelEvent *event) {
 	const int wheel_step = 120;
 	double change_rate = 0.1;
 	double change = (event->delta() < 0) ? (1 + change_rate) : (1 - change_rate);
+	
+	double scale1 = scale_;
 	scale_ *= change;
+
+	Pointf old_vec = Pointf(event->x() - offset_.x, height()-event->y()-offset_.y);
+	Pointf new_vec = old_vec;
+	new_vec.scale(change);
+	offset_.x -= (new_vec.x - old_vec.x);
+	offset_.y -= (new_vec.y - old_vec.y);
+
 	update();
 }
 

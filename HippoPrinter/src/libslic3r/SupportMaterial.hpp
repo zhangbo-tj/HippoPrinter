@@ -4,6 +4,7 @@
 #include <src/libslic3r/PrintConfig.hpp>
 #include <src/libslic3r/Flow.hpp>
 #include <src/libslic3r/Print.hpp>
+#include <boost/thread.hpp>
 
 
 namespace Slic3r {

@@ -3,6 +3,8 @@
 
 
 #include <QtWidgets/QMainWindow>
+#include <QStatusBar>
+#include <QProgressBar>
 //#include "ui_mainwindow.h"
 
 
@@ -13,6 +15,7 @@
 #include "ToolpathPreviewWidget.h"
 #include "ToolpathPlaneWidget.h"
 #include "PrintConfigWidget.h"
+#include "LabelingSliderWidget.h"
 
 
 class QTabWidget;
@@ -27,7 +30,7 @@ class QSlider;
 class QListWidget;
 class QStackedWidget;
 class QScrollArea;
-class QStatusBar;
+
 class HippoPrinter : public QMainWindow
 {
 	Q_OBJECT
@@ -76,9 +79,9 @@ private:
 	QAction* about_manual_action_;	//获取软件使用手册
 	QAction* about_qt_action_;	//获取相关资料
 
-
 	QAction* gen_toolpath_action_;		//生成打印路径
 
+	QProgressBar* process_progressbar_;
 
 private:
 
@@ -94,15 +97,16 @@ private:
 	//显示三维打印路径
 	QWidget* toolpath_3d_widget_;
 	ToolpathPreviewWidget* toolpath_preview_widget_;
-	QSlider* toolpath_3d_slider_;
+	//QSlider* toolpath_3d_slider_;
+	LabelingSliderWidget* toolpath_3d_slider_;
 	QHBoxLayout* toolpath_3d_layout_;
 
 	//显示二维打印路径
 	QWidget* toolpath_2d_widget_;
 	ToolpathPlaneWidget* toolpath_plane_widget_;
-	QSlider* toolpath_2d_slider_;
+	LabelingSliderWidget* toolpath_2d_slider_;
+	//QSlider* toolpath_2d_slider_;
 	QHBoxLayout* toolpath_2d_layout_;
-
 
 	//设置耗材参数、打印参数、打印机参数
 	PrintConfigWidget* print_config_widget_;
@@ -111,10 +115,10 @@ private:
 		
 private slots:
 	void StartProcess();
+	void ExportGCode();
 
 private:
 	void LoadFile(char* file_name);
-	void LoadModelObjects();
 
 	void SetDefaultBedShape();
 	void LoadBedShape();

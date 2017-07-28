@@ -307,14 +307,14 @@
     <ClCompile Include="GeneratedFiles\Release\moc_ToolpathPlaneWidget.cpp">
       <Filter>Generated Files\Release</Filter>
     </ClCompile>
-    <ClCompile Include="SettingWidget.cpp">
+    <ClCompile Include="GCodeExporter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GeneratedFiles\Debug\moc_SettingWidget.cpp">
-      <Filter>Generated Files\Debug</Filter>
+    <ClCompile Include="src\libslic3r\GCode\PressureRegulator.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GeneratedFiles\Release\moc_SettingWidget.cpp">
-      <Filter>Generated Files\Release</Filter>
+    <ClCompile Include="LabelingSliderWidget.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -337,9 +337,6 @@
       <Filter>Header Files</Filter>
     </CustomBuild>
     <CustomBuild Include="ToolpathPlaneWidget.h">
-      <Filter>Header Files</Filter>
-    </CustomBuild>
-    <CustomBuild Include="SettingWidget.h">
       <Filter>Header Files</Filter>
     </CustomBuild>
   </ItemGroup>
@@ -567,6 +564,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="QT2VCG.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GCodeExporter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\libslic3r\GCode\PressureRegulator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="LabelingSliderWidget.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

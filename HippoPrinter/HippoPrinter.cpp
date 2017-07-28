@@ -2,6 +2,8 @@
 #include <iostream>
 
 #include <thread>
+#include <future>
+#include <functional>
 
 #include<QSize>
 #include <QString>
@@ -24,6 +26,8 @@
 #include <QSlider>
 #include <QScrollArea>
 #include <QIcon>
+#include <QFileDialog>
+#include <QMessageBox>
 
 HippoPrinter::HippoPrinter(QWidget *parent)
 	: QMainWindow(parent),
@@ -52,9 +56,11 @@ HippoPrinter::HippoPrinter(QWidget *parent)
 	setContentsMargins(5, 5, 10, 5);
 	statusbar_ = statusBar();
 	statusbar_->showMessage("Ready");
-	print_->SetStatusBar(statusbar_);
-	
-	//statusBar()->showMessage(tr("Ready"));
+	process_progressbar_ = new QProgressBar(this);
+	process_progressbar_->setRange(0, 100);
+	process_progressbar_->setValue(0);
+	statusbar_->addPermanentWidget(process_progressbar_);
+	print_->SetStatusBar(statusbar_,process_progressbar_);
 
 	if (!isMaximized()) {
 		showMaximized();
@@ -78,7 +84,7 @@ void HippoPrinter::InitActions() {
 	save_model_action_->setStatusTip(QString::fromLocal8Bit("保存模型文件"));
 
 	//保存GCode文件
-	save_GCode_action_ = new QAction(QString::fromLocal8Bit("保存G代码"));
+	save_GCode_action_ = new QAction(QString::fromLocal8Bit("保存GCode"));
 	save_GCode_action_->setShortcut(tr("Ctrl+G"));
 	save_GCode_action_->setStatusTip(QString::fromLocal8Bit("保存GCode文件"));
 
@@ -119,17 +125,25 @@ void HippoPrinter::InitActions() {
 	//开始生成打印路径
 	gen_toolpath_action_ = new QAction(QString::fromLocal8Bit("生成路径"));
 	gen_toolpath_action_->setStatusTip(QString::fromLocal8Bit("生成打印路径"));
+
 }
 
 void HippoPrinter::InitToolBars() {
 	action_toolbar_ = addToolBar(QString::fromLocal8Bit("actions"));
 
 	QIcon gen_toolpath_icon;
-	gen_toolpath_icon.addFile(QString::fromLocal8Bit("Resources/Icons/gen_toolpath.png"), QSize(), QIcon::Normal, QIcon::Off);
+	gen_toolpath_icon.addFile(QString::fromLocal8Bit("Resources/Icons/gen_toolpath.png"), 
+		QSize(), QIcon::Normal, QIcon::Off);
 	gen_toolpath_action_->setIcon(gen_toolpath_icon);
 	gen_toolpath_action_->setIconText(QString::fromLocal8Bit("生成路径"));
 	action_toolbar_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 	action_toolbar_->addAction(gen_toolpath_action_);
+
+	QIcon save_gcode_icon;
+	save_gcode_icon.addFile(QString::fromLocal8Bit("Resources/Icons/save_gcode.png"),
+		QSize(), QIcon::Normal, QIcon::Off);
+	save_GCode_action_->setIcon(save_gcode_icon);
+	action_toolbar_->addAction(save_GCode_action_);
 	
 }
 
@@ -177,25 +191,32 @@ void HippoPrinter::InitMenus() {
 void HippoPrinter::InitWidgets() {
 	//显示三维模型的控件
 	model_widget_ = new ModelWidget(print_,model_);
-	
 
 	//显示三维打印路径Tab页
 	toolpath_3d_widget_ = new QWidget();
 	toolpath_preview_widget_ = new ToolpathPreviewWidget(print_,&layer_values_);
-	toolpath_3d_slider_ = new QSlider(Qt::Vertical);
+	//toolpath_3d_slider_ = new QSlider(Qt::Vertical);
+	toolpath_3d_slider_ = new LabelingSliderWidget();
+	toolpath_3d_slider_->setOrientation(Qt::Vertical);
 	toolpath_3d_slider_->setRange(0, 0);
 	toolpath_3d_slider_->setSingleStep(1);
+	
+	
 	//分别添加自定义的三维路径显示控件及其右侧Slider
 	toolpath_3d_layout_ = new QHBoxLayout(toolpath_3d_widget_);
 	toolpath_3d_layout_->addWidget(toolpath_preview_widget_);
 	toolpath_3d_layout_->addWidget(toolpath_3d_slider_);
-		
+	toolpath_3d_slider_->setEnabled(false);
+
 	//显示二维打印路径Tab页
 	toolpath_2d_widget_ = new QWidget();
 	toolpath_plane_widget_ = new ToolpathPlaneWidget(print_,&layer_values_);
-	toolpath_2d_slider_ = new QSlider(Qt::Vertical);
+	//toolpath_2d_slider_ = new QSlider(Qt::Vertical);
+	toolpath_2d_slider_ = new LabelingSliderWidget();
+	toolpath_2d_slider_->setOrientation(Qt::Vertical);
 	toolpath_2d_slider_->setRange(0, 0);
 	toolpath_2d_slider_->setSingleStep(1);
+	toolpath_2d_slider_->setEnabled(false);
 	//分别添加显示二维路径的控件以及右侧的QSlider
 	toolpath_2d_layout_ = new QHBoxLayout(toolpath_2d_widget_);
 	toolpath_2d_layout_->addWidget(toolpath_plane_widget_);
@@ -243,8 +264,6 @@ void HippoPrinter::InitLayout() {
 	central_widget_->setLayout(central_layout_);
 
 	setCentralWidget(central_widget_);
-
-	//setCentralWidget(central_tabwidget_);
 }
 
 
@@ -257,6 +276,8 @@ void HippoPrinter::InitConnections() {
 
 	//生成打印路径Action
 	connect(gen_toolpath_action_, &QAction::triggered, this, &HippoPrinter::StartProcess);
+
+	connect(save_GCode_action_, &QAction::triggered, this, &HippoPrinter::ExportGCode);
 
 	//切换Tab页
 	connect(central_tabwidget_, &QTabWidget::currentChanged, this, &HippoPrinter::SwitchTab);
@@ -302,7 +323,7 @@ void HippoPrinter::SwitchTab() {
 	}
 	if (current_tab_index == 2) {
 		if (!processed_) {
-			StartProcess();
+//			StartProcess();
 		}
 		else {
 			toolpath_plane_widget_->show();
@@ -394,7 +415,7 @@ void HippoPrinter::ArrangeObjects()
 }
 
 void HippoPrinter::PrintProcess() {
-	print_->Process();
+	//print_->Process(sta);
 }
 
 /*
@@ -406,10 +427,12 @@ void HippoPrinter::StartProcess() {
 		OnProcessCompleted();
 		return;
 	}
-
 	print_->Process();
+
 	OnProcessCompleted();
+	qDebug() << "finished";
 }
+
 
 
 /*
@@ -425,9 +448,6 @@ void HippoPrinter::OnModelChanged() {
 	print_->reload_model_instances();
 
 	processed_ = false;
-	//StartProcess();
-// 	std::thread t(&HippoPrinter::StartProcess,this);
-// 	t.join();
 }
 
 
@@ -437,11 +457,13 @@ void HippoPrinter::OnModelChanged() {
 void HippoPrinter::RefreshWidgets() {
 	model_widget_->ReloadVolumes();
 	toolpath_preview_widget_->ReloadVolumes();
+	toolpath_3d_slider_->setEnabled(true);
 	toolpath_3d_slider_->setMaximum(layer_values_.size());
 	toolpath_3d_slider_->setMaximum(layer_values_.size());
 	//toolpath_3d_slider_->setMaximum(toolpath_preview_widget_->layer_values_.size());
 	toolpath_3d_slider_->setValue(toolpath_3d_slider_->maximum());
 
+	toolpath_2d_slider_->setEnabled(true);
 	toolpath_2d_slider_->setMaximum(layer_values_.size());
 	toolpath_2d_slider_->setValue(toolpath_2d_slider_->maximum());
 	if (central_tabwidget_->currentIndex() == 2) {
@@ -467,6 +489,19 @@ void HippoPrinter::OnProcessCompleted() {
 	toolpath_2d_slider_->setMaximum(layer_values_.size());
 	toolpath_2d_slider_->setValue(toolpath_2d_slider_->maximum());
 	toolpath_plane_widget_->update();
-
 }
 
+
+void HippoPrinter::ExportGCode() {
+	QString file_name = QFileDialog::getSaveFileName(this,
+		QString::fromLocal8Bit("保存GCode文件"),
+		"",
+		"*.gcode");
+	if (!file_name.isNull()) {
+		print_->apply_config(dynamic_config_);
+		print_->ExportGCode(file_name.toLatin1().data());
+		QMessageBox::information(this, 
+			QString::fromLocal8Bit("提示"),
+			QString::fromLocal8Bit("GCode文件保存成功"));
+	}
+}

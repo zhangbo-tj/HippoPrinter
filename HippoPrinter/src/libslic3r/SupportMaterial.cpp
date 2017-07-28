@@ -7,6 +7,7 @@
 #include <src/libslic3r/ClipperUtils.hpp>
 
 #include "src/libslic3r/Fill/Fill.hpp"
+#include <src/libslic3r/libslic3r.h>
 
 namespace Slic3r {
 }
@@ -81,8 +82,6 @@ void SupportMaterial::Generate(PrintObject& object) {
 	}
 	
 	GenerateToolPaths(object, overhang_map, contact_map, interface_map, base_map);
-
-
 }
 
 
@@ -275,13 +274,16 @@ void SupportMaterial::ContactArea(PrintObject& object, std::map<double, Polygons
 						overhang_perimeters = diff_pl(overhang_perimeters, lower_grown_slices);
 
 						//只考虑strtaight overhangs
-						Polylines temp_overhang_perimeters;
-						for (Polyline& polyline : overhang_perimeters) {
-							if (polyline.is_straight()) {
-								temp_overhang_perimeters.push_back(polyline);
-							}
-						}
-						std::swap(temp_overhang_perimeters, overhang_perimeters);
+// 						Polylines temp_overhang_perimeters;
+// 						for (Polyline& polyline : overhang_perimeters) {
+// 							if (polyline.is_straight()) {
+// 								temp_overhang_perimeters.push_back(polyline);
+// 							}
+// 						}
+// 						std::swap(temp_overhang_perimeters, overhang_perimeters);
+						overhang_perimeters.erase(std::remove_if(overhang_perimeters.begin(),overhang_perimeters.end(),
+							[](Polyline& polyline) {return !polyline.is_straight(); }),
+							overhang_perimeters.end());
 
 						//只考虑终点在layer slices内的overhangs
 						for (Polyline& polyline : overhang_perimeters) {
@@ -289,13 +291,19 @@ void SupportMaterial::ContactArea(PrintObject& object, std::map<double, Polygons
 							polyline.extend_end(flow_width);
 						}
 						
-						temp_overhang_perimeters.clear();
-						for (Polyline& polyline : overhang_perimeters) {
-							if (layer->slices.contains(polyline.first_point()) && layer->slices.contains(polyline.last_point())) {
-								temp_overhang_perimeters.push_back(polyline);
-							}
-						}
-						swap(temp_overhang_perimeters, overhang_perimeters);
+// 						temp_overhang_perimeters.clear();
+// 						for (Polyline& polyline : overhang_perimeters) {
+// 							if (layer->slices.contains(polyline.first_point()) && layer->slices.contains(polyline.last_point())) {
+// 								temp_overhang_perimeters.push_back(polyline);
+// 							}
+// 						}
+// 						swap(temp_overhang_perimeters, overhang_perimeters);
+
+						overhang_perimeters.erase(std::remove_if(overhang_perimeters.begin(),overhang_perimeters.end(),
+							[&](Polyline& polyline) {
+							return !layer->slices.contains(polyline.first_point()) || !layer->slices.contains(polyline.last_point());
+							}),
+							overhang_perimeters.end());
 
 
 						//通过扩展polyline的宽度，将bridging polylines转换为polygons
@@ -666,13 +674,17 @@ void SupportMaterial::GenerateBottomInterfacesLayers(std::vector<double>& suppor
 				Polygons interface_area_polygons = intersection(base_map[layer_id], this_polygons);
 
 				//删除面积过小的区域
-				Polygons temp_interface_area;
-				for (Polygon& polygon : interface_area_polygons) {
-					if (std::abs(polygon.area()) >= area_threshold) {
-						temp_interface_area.push_back(polygon);
-					}
-				}
-				std::swap(temp_interface_area, interface_area_polygons);
+// 				Polygons temp_interface_area;
+// 				for (Polygon& polygon : interface_area_polygons) {
+// 					if (std::abs(polygon.area()) >= area_threshold) {
+// 						temp_interface_area.push_back(polygon);
+// 					}
+// 				}
+// 				std::swap(temp_interface_area, interface_area_polygons);
+				interface_area_polygons.erase(std::remove_if(interface_area_polygons.begin(),
+					interface_area_polygons.end(),
+					[&](Polygon& polygon) {return std::abs(polygon.area()) < area_threshold; }),
+					interface_area_polygons.end());
 
 				base_map[layer_id] = diff(base_map[layer_id], interface_area_polygons);
 
@@ -781,12 +793,12 @@ void SupportMaterial::ClipWithObject(PrintObject& object, std::map<int,Polygons>
 
 void SupportMaterial::GenerateToolPaths(PrintObject& object,std::map<double,Polygons>& overhang_map,
 	std::map<double,Polygons>& contact_map,std::map<int,Polygons>& interface_map,std::map<int,Polygons>& base_map) {
-
-	//TODO: 使用多线程
-	for (int layer_id = 0; layer_id < object.support_layers.size(); layer_id++) {
-		ProcessLayer(object, layer_id, overhang_map, contact_map, interface_map, base_map);
-	}
-
+	parallelize<int>(
+		0,
+		object.support_layers.size()-1,
+		boost::bind(&SupportMaterial::ProcessLayer,this,std::ref(object),_1,overhang_map,contact_map,interface_map,base_map),
+		print_config_->threads.value
+	);
 
 }
 
@@ -794,7 +806,7 @@ void SupportMaterial::GenerateToolPaths(PrintObject& object,std::map<double,Poly
 /*
  *	分别对每一层支撑结构进行处理，最后再组合在一起
  */
-void SupportMaterial::ProcessLayer(PrintObject& object, int layer_id, std::map<double, Polygons>& overhang_map,
+void SupportMaterial::ProcessLayer(PrintObject& object,int layer_id, std::map<double, Polygons>& overhang_map,
 	std::map<double, Polygons>& contact_map, std::map<int, Polygons>& interface_map, std::map<int, Polygons>& base_map) {
 	int contact_loops = 1;
 	

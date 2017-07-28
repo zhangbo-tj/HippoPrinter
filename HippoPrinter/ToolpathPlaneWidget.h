@@ -46,8 +46,8 @@ public slots:
 private:
 	Print* print_;		//打印对象
 	double scale_;		//控件缩放操作
-	Point offset_;		//控件平移操作
-	Point old_pos_;
+	Pointf offset_;		//控件平移操作
+	Pointf old_pos_;
 	bool left_pressed_;
 
 	BoundingBoxf bed_shape_;	//Bounding Box
